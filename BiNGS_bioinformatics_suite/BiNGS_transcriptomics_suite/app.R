@@ -53,12 +53,12 @@ ui <- fluidPage(
                           "Plotly or GGplot:",
                           choices = as.list(type_list),
                           selected = type_list[[1]]),
-             actionButton("run_button", "Create PCA", 
+             actionButton("PCA_run_button", "Create PCA", 
                           style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
                conditionalPanel("input.PCA_Plot_type == 'plotly'",
-                                plotlyOutput("pca_plot", height = "600px")),
+                                plotlyOutput("pca_plotly", height = "600px")),
                conditionalPanel("input.PCA_Plot_type == 'ggplot'",
-                                plotOutput("pca_plot", height = "600px")),
+                                plotOutput("pca_ggplot", height = "600px")),
                
                h3("Variance Explained"),
                DT::dataTableOutput("pca_variance")
@@ -155,60 +155,64 @@ server <- function(input, output, session) {
     return(formatted_metadata)
   })
   
+  # Reactive PCA
   pca_res <- reactive({
     req(count_data(), sample_metadata())
-    run_pca(count_data(), sample_metadata(), 
-            remove_samples = NULL,
+    run_pca(count_data(), sample_metadata(),
             scale_data = TRUE)
   })
   
-  # Update dropdowns for PC choices once PCA is available
+  # Populate PC choices
   observeEvent(pca_res(), {
     pcs <- colnames(pca_res()$coords)[grepl("^PC", colnames(pca_res()$coords))]
     updateSelectizeInput(session, "x_pc", choices = pcs, selected = pcs[1])
     updateSelectizeInput(session, "y_pc", choices = pcs, selected = pcs[2])
   })
   
-  # PCA plot output
-  observeEvent(input$PCA_Plot_type, {
-    
-    if (input$PCA_Plot_type == "ggplot") {
-      output$pca_plot <- renderPlot({
-        req(pca_res())
-        plot_pca(
-          pca_coords = pca_res()$coords,
-          variance   = pca_res()$variance,
-          x_pc       = input$x_pc,
-          y_pc       = input$y_pc,
-          color_var  = input$color_var,
-          palette    = input$pca_color_palette,
-          plot_type  = "ggplot",
-          title      = "PCA Plot"
-        )
-      })
-      
-    } else if (input$PCA_Plot_type == "plotly") {
-      output$pca_plot <- renderPlotly({
-        req(pca_res())
-        plot_pca(
-          pca_coords = pca_res()$coords,
-          variance   = pca_res()$variance,
-          x_pc       = input$x_pc,
-          y_pc       = input$y_pc,
-          color_var  = input$color_var,
-          palette    = input$pca_color_palette,
-          plot_type  = "plotly",
-          title      = "PCA Plot"
-        )
-      })
-    }
+  # Populate color variable
+  observeEvent(sample_metadata(), {
+    updateSelectizeInput(session, "color_var",
+                         choices = setdiff(colnames(sample_metadata()), "sample_id"),
+                         selected = "Condition"
+    )
   })
   
-  observeEvent(sample_metadata(), {
-    updateSelectizeInput(session, "color_var", label = "Sample groups", 
-                         choices = setdiff(colnames(sample_metadata()), metadata_columns_to_remove), 
-                         selected = "condition", 
-                         server = TRUE)
+  # Render plot
+  observeEvent(input$PCA_run_button, {
+    
+    output$PCA_ggplot = renderPlot({
+      plot_pca(
+        pca_coords = pca_res()$coords,
+        variance   = pca_res()$variance,
+        x_pc       = input$x_pc,
+        y_pc       = input$y_pc,
+        color_var  = input$color_var,
+        palette    = input$pca_color_palette,
+        plot_type  = "ggplot"
+      )
+    })
+    
+    output$PCA_Plotly = renderPlotly({
+      plot_pca(
+        pca_coords = pca_res()$coords,
+        variance   = pca_res()$variance,
+        x_pc       = input$x_pc,
+        y_pc       = input$y_pc,
+        color_var  = input$color_var,
+        palette    = input$pca_color_palette,
+        plot_type  = "plotly"
+      )
+    })
+    
+    # Variance explained table
+    output$pca_variance <- DT::renderDataTable({
+      req(pca_res())
+      data.frame(
+        PC = paste0("PC", seq_along(pca_res()$variance)),
+        Variance = round(pca_res()$variance, 2)
+      )
+    })
+    
   })
   
   observeEvent(count_data(), {012
