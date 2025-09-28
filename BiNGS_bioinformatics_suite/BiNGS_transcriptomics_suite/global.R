@@ -1,3 +1,36 @@
+#Run the pca
+run_pca <- function(counts, metadata, remove_samples = NULL, scale_data = TRUE) {
+  #Remove gene_id and gene_name
+  expr <- counts[, !(colnames(counts) %in% c("gene_id", "gene_name"))]
+  #Remove requested samples
+  if (!is.null(remove_samples)) {
+    expr <- expr[, !(colnames(expr) %in% remove_samples), drop = FALSE]
+  }
+  #Transpose so rows = samples, cols = genes
+  expr_t <- t(expr)
+  #Filter out genes with zero variance
+  expr_t <- expr_t[, apply(expr_t, 2, var) > 0, drop = FALSE]
+  #Run PCA
+  pca_res <- prcomp(expr_t, scale. = scale_data)
+  #Variance explained
+  var_explained <- (pca_res$sdev^2) / sum(pca_res$sdev^2) * 100
+  #Format PCA coordinates (samples × PCs)
+  pca_coords <- as.data.frame(pca_res$x)
+  pca_coords$sample_id <- rownames(pca_coords)
+  #Join with metadata if available
+  if (!is.null(metadata)) {
+    pca_coords <- dplyr::left_join(pca_coords, metadata, by = "sample_id")
+  }
+  #Return results
+  return(list(
+    pca = pca_res,
+    coords = pca_coords,
+    variance = var_explained
+  ))
+}
+
+
+
 get_factor_comparisons = function(condition = c(), 
                                   reference_group = NULL) {
   condition = sort(unique(as.character(condition)))
@@ -284,7 +317,7 @@ table_panova = function(counts_df, metadata, log, QC_check, gene, fact_var){
   }}
 
 
-# Variables to color the PCA plots and sampel similarity side color bars by
+# Variables to color the PCA plots and sample similarity side color bars by
 # Allowed values are named character vectors where the names are sample metadata 
 # column names and the values are formatted versions that will be used for report 
 # tab names and legend titles
