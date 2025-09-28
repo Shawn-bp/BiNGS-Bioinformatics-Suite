@@ -24,7 +24,9 @@ ui <- fluidPage(
     
     # ------------------ PCA TAB ------------------
     tabPanel("PCA",
-             selectizeInput(
+             fluidRow(
+               column(3,
+                      selectizeInput(
                'x_pc',
                label = "X axis PC",
                choices = NULL,
@@ -43,7 +45,9 @@ ui <- fluidPage(
              selectizeInput(
                "color_var",
                label = "Color samples by:",
-               choices = NULL  # filled dynamically from metadata
+               choices = NULL,
+               options = list(`actions-box` = TRUE),
+               multiple = FALSE
              ),
              radioButtons("pca_color_palette",
                           "Select the color palette to use:",
@@ -55,18 +59,23 @@ ui <- fluidPage(
                           selected = type_list[[1]]),
              actionButton("PCA_run_button", "Create PCA", 
                           style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
-               conditionalPanel("input.PCA_Plot_type == 'plotly'",
+               ),
+             column(9,
+             conditionalPanel("input.PCA_Plot_type == 'plotly'",
                                 plotlyOutput("pca_plotly", height = "600px")),
-               conditionalPanel("input.PCA_Plot_type == 'ggplot'",
+             conditionalPanel("input.PCA_Plot_type == 'ggplot'",
                                 plotOutput("pca_ggplot", height = "600px")),
                
                h3("Variance Explained"),
                DT::dataTableOutput("pca_variance")
              ),
-    
+             )
+    ),
     # ------------------ BOXPLOT TAB ------------------
     tabPanel("Boxplot",
-             selectizeInput(
+             fluidRow(
+               column(3,
+               selectizeInput(
                'gene_var',
                label = "Select Gene:",
                choices = NULL,
@@ -111,8 +120,9 @@ ui <- fluidPage(
              br(), 
              br(),
              downloadButton("download_pval", "Download_pvalue_table.csv"),
-             
+               ),
              # ------------------ BOXPLOT OUTPUTS ------------------
+             column(9, 
              conditionalPanel(condition = "input.Boxplot_Plot_type == 'plotly'",
                               plotlyOutput("boxplot_plotly")),
              conditionalPanel(condition = "input.Boxplot_Plot_type == 'ggplot'",
@@ -123,9 +133,10 @@ ui <- fluidPage(
              DT::dataTableOutput("table_panova"),
              h3("Gene Expression Table"),
              DT::dataTableOutput("table_data")
+             ),
+             )
     ),
-    
-    # ------------------ HEATMAP TABS ------------------
+  # ------------------ HEATMAP TABS ------------------
     tabPanel("Sample Distance Heatmap",
              plotOutput("sample_distance_heatmap_plot")
     ),
@@ -135,7 +146,6 @@ ui <- fluidPage(
     )
   )
 )
-
 server <- function(input, output, session) {
   
   options(shiny.maxRequestSize=100*1024^2) 
@@ -171,16 +181,17 @@ server <- function(input, output, session) {
   
   # Populate color variable
   observeEvent(sample_metadata(), {
-    updateSelectizeInput(session, "color_var",
-                         choices = setdiff(colnames(sample_metadata()), "sample_id"),
-                         selected = "Condition"
+    updateSelectizeInput(session, "color_var", label = "Color samples by:",
+                         choices = setdiff(colnames(sample_metadata()), metadata_columns_to_remove),
+                         selected = "condition",
+                         server = TRUE
     )
   })
   
   # Render plot
   observeEvent(input$PCA_run_button, {
     
-    output$PCA_ggplot = renderPlot({
+    output$pca_ggplot = renderPlot({
       plot_pca(
         pca_coords = pca_res()$coords,
         variance   = pca_res()$variance,
@@ -192,7 +203,7 @@ server <- function(input, output, session) {
       )
     })
     
-    output$PCA_Plotly = renderPlotly({
+    output$pca_plotly = renderPlotly({
       plot_pca(
         pca_coords = pca_res()$coords,
         variance   = pca_res()$variance,
@@ -265,43 +276,48 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$run_button, {
+    req(input$gene_var, input$fact_var)  # <--- ensures inputs exist
     
-    output$boxplot_plotly = renderPlotly(
-      draw_boxplot(expression_df(), 
-                   input$gene_var, 
-                   input$fact_var, 
-                   input$color_palette,
-                   input$Log, 
-                   input$Box_violin, 
-                   input$Plot_type
+    output$boxplot_plotly = renderPlotly({
+      req(expression_df())
+      draw_boxplot(
+        expression_df(), 
+        input$gene_var, 
+        input$fact_var, 
+        input$boxplot_color_palette, 
+        input$Log, 
+        input$Box_violin, 
+        input$Boxplot_Plot_type
       )
-    )
-    output$boxplot_ggplot = renderPlot(
-      draw_boxplot(expression_df(), 
-                   input$gene_var, 
-                   input$fact_var, 
-                   input$color_palette,
-                   input$Log, 
-                   input$Box_violin, 
-                   input$Plot_type
+    })
+    
+    output$boxplot_ggplot = renderPlot({
+      req(expression_df())
+      draw_boxplot(
+        expression_df(), 
+        input$gene_var, 
+        input$fact_var, 
+        input$boxplot_color_palette, 
+        input$Log, 
+        input$Box_violin, 
+        input$Boxplot_Plot_type
       )
-    )
+    })
+    
     output$table_data = renderDataTable(
       expression_table_df(), 
-      options = list(lengthMenu = c(5, 30, 50), 
-                     pageLength = 5)
+      options = list(lengthMenu = c(5, 30, 50), pageLength = 5)
     )
     output$table_p = renderDataTable(
       pvalue_df(), 
-      options = list(lengthMenu = c(5, 30, 50), 
-                     pageLength = 5)
+      options = list(lengthMenu = c(5, 30, 50), pageLength = 5)
     )
     output$table_panova = renderDataTable(
       panova_df(), 
-      options = list(lengthMenu = c(5, 30, 50), 
-                     pageLength = 5)
+      options = list(lengthMenu = c(5, 30, 50), pageLength = 5)
     )
   })
+  
   
   output$download_exp <- downloadHandler(filename = function() {paste0(input$gene_var, "_expression.csv")}, 
                                          content = function(file) {write.csv(expression_table_df(), file, row.names = FALSE)})
