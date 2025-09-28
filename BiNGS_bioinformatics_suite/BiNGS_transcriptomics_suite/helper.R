@@ -20,7 +20,7 @@ type_list = c(
   "GGplot" ="ggplot"
 )
 
-plot_list = c(
+box_plot_list = c(
   "Boxplot" = "Boxplot",
   "Boxplot with points" = "box_points",
   "Violin plot" = "Violin plot",
