@@ -67,9 +67,12 @@ ui <- fluidPage(
              br(),
              actionButton("run_button", "Create Boxplot", 
                           style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
-             br(), br(), br(),
+             br(), 
+             br(), 
+             br(),
              downloadButton("download_exp", "Download_expression.csv"),
-             br(), br(),
+             br(), 
+             br(),
              downloadButton("download_pval", "Download_pvalue_table.csv"),
              
              # ------------------ BOXPLOT OUTPUTS ------------------
@@ -213,3 +216,5 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui = ui, server = server)
+
+
