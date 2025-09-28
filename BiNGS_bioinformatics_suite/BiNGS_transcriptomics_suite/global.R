@@ -1,31 +1,20 @@
-# Run the PCA
-run_pca <- function(counts, metadata, remove_samples = NULL, scale_data = TRUE) {
-  # Remove gene_id and gene_name
+# Run PCA
+run_pca <- function(counts, metadata, scale_data = TRUE) {
   expr <- counts[, !(colnames(counts) %in% c("gene_id", "gene_name"))]
-  
-  # Transpose so rows = samples, cols = genes
   expr_t <- t(expr)
-  
-  # Filter out genes with zero variance
   expr_t <- expr_t[, apply(expr_t, 2, var) > 0, drop = FALSE]
   
-  # Run PCA
   pca_res <- prcomp(expr_t, scale. = scale_data)
   
-  # Variance explained (%)
   var_explained <- (pca_res$sdev^2) / sum(pca_res$sdev^2) * 100
-  names(var_explained) <- paste0("PC", seq_along(var_explained))
   
-  # Format PCA coordinates (samples × PCs)
   pca_coords <- as.data.frame(pca_res$x)
   pca_coords$sample_id <- rownames(pca_coords)
   
-  # Join with metadata if available
   if (!is.null(metadata)) {
     pca_coords <- dplyr::left_join(pca_coords, metadata, by = "sample_id")
   }
   
-  # Return results
   return(list(
     pca = pca_res,
     coords = pca_coords,
@@ -33,14 +22,12 @@ run_pca <- function(counts, metadata, remove_samples = NULL, scale_data = TRUE) 
   ))
 }
 
-
 # Plot PCA
-plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL, 
+plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL,
                      palette = "Set1", plot_type = "ggplot", title = "PCA Plot") {
   
-  # Axis labels with variance explained
-  x_label <- paste0(x_pc, " (", round(variance[x_pc], 2), "%)")
-  y_label <- paste0(y_pc, " (", round(variance[y_pc], 2), "%)")
+  x_label <- paste0(x_pc, " (", round(variance[as.numeric(gsub("PC", "", x_pc))], 2), "%)")
+  y_label <- paste0(y_pc, " (", round(variance[as.numeric(gsub("PC", "", y_pc))], 2), "%)")
   
   if (plot_type == "ggplot") {
     p <- ggplot(pca_coords, aes_string(x = x_pc, y = y_pc, color = color_var)) +
@@ -52,9 +39,9 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL,
     
   } else if (plot_type == "plotly") {
     p <- plotly::plot_ly(
-      pca_coords, 
-      x = ~get(x_pc), 
-      y = ~get(y_pc), 
+      pca_coords,
+      x = ~get(x_pc),
+      y = ~get(y_pc),
       color = if (!is.null(color_var)) pca_coords[[color_var]] else NULL,
       colors = RColorBrewer::brewer.pal(8, palette),
       type = "scatter",
@@ -68,6 +55,7 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL,
     return(p)
   }
 }
+
 
 
 
