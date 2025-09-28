@@ -24,8 +24,45 @@ ui <- fluidPage(
     
     # ------------------ PCA TAB ------------------
     tabPanel("PCA",
-             plotOutput("pca_plot")  # placeholder for PCA plot
-    ),
+             selectizeInput(
+               'x_pc',
+               label = "X axis PC",
+               choices = NULL,
+               selected = NULL, 
+               options = list(`actions-box` = TRUE),
+               multiple = FALSE
+             ),
+             selectizeInput(
+               'y_pc',
+               label = "Y axis PC",
+               choices = NULL,
+               selected = NULL, 
+               options = list(`actions-box` = TRUE),
+               multiple = FALSE
+             ),
+             selectizeInput(
+               "color_var",
+               label = "Color samples by:",
+               choices = NULL  # filled dynamically from metadata
+             ),
+             radioButtons("pca_color_palette",
+                          "Select the color palette to use:",
+                          choices = as.list(color_palette_list),
+                          selected = color_palette_list[[1]]),
+             radioButtons("PCA_Plot_type",
+                          "Plotly or GGplot:",
+                          choices = as.list(type_list),
+                          selected = type_list[[1]]),
+             actionButton("run_button", "Create PCA", 
+                          style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
+               conditionalPanel("input.PCA_Plot_type == 'plotly'",
+                                plotlyOutput("pca_plot", height = "600px")),
+               conditionalPanel("input.PCA_Plot_type == 'ggplot'",
+                                plotOutput("pca_plot", height = "600px")),
+               
+               h3("Variance Explained"),
+               DT::dataTableOutput("pca_variance")
+             ),
     
     # ------------------ BOXPLOT TAB ------------------
     tabPanel("Boxplot",
@@ -44,7 +81,7 @@ ui <- fluidPage(
                options = list(`actions-box` = TRUE),
                multiple = FALSE
              ),
-             radioButtons("color_palette",
+             radioButtons("boxplot_color_palette",
                           "Select the color palette to use:",
                           choices = as.list(color_palette_list),
                           selected = color_palette_list[[1]]),
@@ -56,7 +93,7 @@ ui <- fluidPage(
                           "Log expression:",
                           choices = as.list(Log_list),
                           selected = Log_list[[1]]),
-             radioButtons("Plot_type",
+             radioButtons("Boxplot_Plot_type",
                           "Plotly or GGplot:",
                           choices = as.list(type_list),
                           selected = type_list[[1]]),
@@ -76,9 +113,9 @@ ui <- fluidPage(
              downloadButton("download_pval", "Download_pvalue_table.csv"),
              
              # ------------------ BOXPLOT OUTPUTS ------------------
-             conditionalPanel(condition = "input.Plot_type == 'plotly'",
+             conditionalPanel(condition = "input.Boxplot_Plot_type == 'plotly'",
                               plotlyOutput("boxplot_plotly")),
-             conditionalPanel(condition = "input.Plot_type == 'ggplot'",
+             conditionalPanel(condition = "input.Boxplot_Plot_type == 'ggplot'",
                               plotOutput("boxplot_ggplot")),
              h3("P-value Table"),
              DT::dataTableOutput("table_p"),
@@ -99,7 +136,6 @@ ui <- fluidPage(
   )
 )
 
-# Define server logic required to draw a histogram
 server <- function(input, output, session) {
   
   options(shiny.maxRequestSize=100*1024^2) 
@@ -117,6 +153,62 @@ server <- function(input, output, session) {
     formatted_metadata = read.csv(input$metadata_csv$datapath)
     formatted_metadata$sample_id = make.names(formatted_metadata$sample_id)
     return(formatted_metadata)
+  })
+  
+  pca_res <- reactive({
+    req(count_data(), sample_metadata())
+    run_pca(count_data(), sample_metadata(), 
+            remove_samples = NULL,
+            scale_data = TRUE)
+  })
+  
+  # Update dropdowns for PC choices once PCA is available
+  observeEvent(pca_res(), {
+    pcs <- colnames(pca_res()$coords)[grepl("^PC", colnames(pca_res()$coords))]
+    updateSelectizeInput(session, "x_pc", choices = pcs, selected = pcs[1])
+    updateSelectizeInput(session, "y_pc", choices = pcs, selected = pcs[2])
+  })
+  
+  # PCA plot output
+  observeEvent(input$PCA_Plot_type, {
+    
+    if (input$PCA_Plot_type == "ggplot") {
+      output$pca_plot <- renderPlot({
+        req(pca_res())
+        plot_pca(
+          pca_coords = pca_res()$coords,
+          variance   = pca_res()$variance,
+          x_pc       = input$x_pc,
+          y_pc       = input$y_pc,
+          color_var  = input$color_var,
+          palette    = input$pca_color_palette,
+          plot_type  = "ggplot",
+          title      = "PCA Plot"
+        )
+      })
+      
+    } else if (input$PCA_Plot_type == "plotly") {
+      output$pca_plot <- renderPlotly({
+        req(pca_res())
+        plot_pca(
+          pca_coords = pca_res()$coords,
+          variance   = pca_res()$variance,
+          x_pc       = input$x_pc,
+          y_pc       = input$y_pc,
+          color_var  = input$color_var,
+          palette    = input$pca_color_palette,
+          plot_type  = "plotly",
+          title      = "PCA Plot"
+        )
+      })
+    }
+  })
+  
+  observeEvent(sample_metadata(), {
+    updateSelectizeInput(session, "color_var", label = "Sample groups", 
+                         choices = setdiff(colnames(sample_metadata()), metadata_columns_to_remove), 
+                         selected = "condition", 
+                         server = TRUE)
   })
   
   observeEvent(count_data(), {012
@@ -216,5 +308,3 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui = ui, server = server)
-
-
