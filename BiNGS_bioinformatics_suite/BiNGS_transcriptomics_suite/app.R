@@ -59,7 +59,15 @@ ui <- fluidPage(
                           selected = type_list[[1]]),
              actionButton("PCA_run_button", "Create PCA", 
                           style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
+             br(), 
+             br(), 
+             br(),
+             downloadButton("download_PCA", "Download_PCA_coords.csv"),
+             br(), 
+             br(),
+             downloadButton("download_variance", "Download_variance_table.csv")
                ),
+    # ------------------ PCA outputs ------------------
              column(9,
              conditionalPanel("input.PCA_Plot_type == 'plotly'",
                                 plotlyOutput("pca_plotly", height = "600px")),
@@ -225,6 +233,43 @@ server <- function(input, output, session) {
     })
     
   })
+  
+  output$download_PCA <- downloadHandler(
+    filename = function() {
+      paste0("PCA_coordinates_", input$color_var, ".csv")
+    },
+    content = function(file) {
+      # Extract PCA coordinates
+      coords <- pca_res()$coords   # assumes samples as rows, PCs as columns
+      
+      # Get selected metadata column
+      meta_field <- input$color_var
+      meta <- sample_metadata()[, meta_field, drop = FALSE]  # returns a one-column data.frame
+      
+      # Make sure rows align by sample
+      meta <- meta[rownames(coords), , drop = FALSE]
+      
+      # Combine coords + metadata
+      export_df <- cbind(coords, meta)
+      
+      # Write to CSV
+      write.csv(export_df, file, row.names = TRUE)
+    }
+  )
+  
+  output$download_variance <- downloadHandler(
+    filename = function() {
+      "PCA_variance_table.csv"
+    },
+    content = function(file) {
+      # grab your variance table
+      variance_df <- pca_res()$variance
+      
+      # write it to CSV
+      write.csv(variance_df, file, row.names = TRUE)
+    }
+  )
+  
   
   observeEvent(count_data(), {012
     updateSelectizeInput(session, "gene_var", label = "Select gene:", 
