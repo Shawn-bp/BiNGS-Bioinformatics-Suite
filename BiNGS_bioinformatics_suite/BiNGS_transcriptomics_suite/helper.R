@@ -38,3 +38,15 @@ QC_check = "No"
 gene = "ST7"
 
 fact_var = "condition"
+
+
+#Heatmap specific variables
+scaling_list = c("None" = "none", "Row" = "row", "Column" = "column", "Log scale" = "log")
+
+clustering_list = c("None" = "none", "Row" = "row", "Column" = "column", "Both" = "both")
+
+dendrogram_list = c("None" = "none", "Row" = "row", "Column" = "column", "Both" = "both")
+
+show_names_list = c("None" = "none", "Row" = "row", "Column" = "column", "Both" = "both")
+
+heatmap_type_list = c("Interactive" = "heatmaply", "Static" = "ggplot")
