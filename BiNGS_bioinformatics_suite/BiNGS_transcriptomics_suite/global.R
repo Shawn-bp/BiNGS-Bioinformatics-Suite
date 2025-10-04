@@ -1,3 +1,4 @@
+# ------------------ PCA ------------------
 # Run PCA
 run_pca <- function(counts, metadata, scale_data = TRUE) {
   expr <- counts[, !(colnames(counts) %in% c("gene_id", "gene_name"))]
@@ -56,9 +57,7 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL,
   }
 }
 
-
-
-
+# ------------------ BOXPLOT ------------------
 get_factor_comparisons = function(condition = c(), 
                                   reference_group = NULL) {
   condition = sort(unique(as.character(condition)))
@@ -636,4 +635,97 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
       }
     }
   }
+}
+
+# ------------------ SAMPLE DISTANCE HEATMAP ------------------
+#Run Sample Distance calculations
+run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, scale_type = "none") {
+  
+  #Remove all non-numeric columns
+  expr <- counts[, !(colnames(counts) %in% c("gene_id", "gene_name"))]
+  
+  #Remove user-selected samples
+  if (!is.null(remove_samples)) {
+    expr <- expr[, !(colnames(expr) %in% remove_samples), drop = FALSE]
+  }
+  
+  #Filter out zero-variance genes
+  expr <- expr[apply(expr, 1, var) > 0, , drop = FALSE]
+  
+  #Do user-selected scaling
+  if (scale_type == "row") {
+    expr <- t(scale(t(expr)))   # scale each gene
+  } else if (scale_type == "column") {
+    expr <- scale(expr)         # scale each sample
+  } else if (scale_type == "log") {
+    expr <- log10(expr + 1)     # avoid log(0)
+  }
+  
+  #Compute euclidean distance and format as a square matrix
+  dist_matrix <- dist(t(expr), method = "euclidean")
+  dist_matrix <- as.matrix(dist_matrix)
+  
+  #Set sample names
+  rownames(dist_matrix) <- colnames(expr)
+  colnames(dist_matrix) <- colnames(expr)
+  
+  return(dist_matrix)
+}
+
+
+#Plot Sample Distance Heatmap
+plot_sample_distance_heatmap <- function(dist_matrix, metadata = NULL, color_scheme = "Dark2", dendrogram = "none", show_names = "none", heatmap_type = "ggplot") {
+  # Ensure matrix is numeric
+  dist_matrix <- as.matrix(dist_matrix)
+  
+  # Melt matrix into long format for ggplot
+  dist_melt <- reshape2::melt(dist_matrix)
+  colnames(dist_melt) <- c("Sample1", "Sample2", "Distance")
+  
+  # Add sample metadata colors (optional)
+  ann_colors <- NULL
+  if (!is.null(metadata) && !is.null(color_by) && color_by %in% colnames(metadata)) {
+    ann_colors <- metadata[, c("sample_id", color_by), drop = FALSE]
+    rownames(ann_colors) <- ann_colors$sample_id
+    ann_colors <- ann_colors[rownames(dist_matrix), , drop = FALSE]
+  }
+  
+  # ---- STATIC GGPLOT VERSION ----
+  if (heatmap_type == "ggplot") {
+    p <- ggplot(dist_melt, aes(x = Sample1, y = Sample2, fill = Distance)) +
+      geom_tile() +
+      scale_fill_distiller(palette = color_scheme, direction = 1) +
+      labs(title = "Sample Distance Heatmap", x = "", y = "") +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 90, hjust = 1),
+        axis.text = if (show_names %in% c("both", "x", "y")) element_text(size = 8) else element_blank(),
+        panel.grid = element_blank()
+      )
+    return(p)
+  }
+  
+  # ---- INTERACTIVE HEATMAPLY VERSION ----
+  else if (heatmap_type == "heatmaply") {
+    library(heatmaply)
+    
+    # Create annotation colors if metadata exists
+    side_colors <- NULL
+    if (!is.null(ann_colors)) {
+      side_colors <- data.frame(ann_colors[, color_by, drop = FALSE])
+      rownames(side_colors) <- ann_colors$sample_id
+    }
+    
+    heatmaply::heatmaply(
+      dist_matrix,
+      colors = colorRampPalette(brewer.pal(9, color_scheme))(256),
+      Rowv = if (cluster %in% c("row", "both")) TRUE else FALSE,
+      Colv = if (cluster %in% c("column", "both")) TRUE else FALSE,
+      labRow = if (show_names %in% c("both", "y")) rownames(dist_matrix) else NULL,
+      labCol = if (show_names %in% c("both", "x")) colnames(dist_matrix) else NULL,
+      main = "Sample Distance Heatmap",
+      row_side_colors = side_colors,
+      col_side_colors = side_colors
+    )
+  } 
 }
