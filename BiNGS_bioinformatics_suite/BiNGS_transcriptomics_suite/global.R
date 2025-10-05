@@ -639,52 +639,29 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
 
 # ------------------ SAMPLE DISTANCE HEATMAP ------------------
 
-# Run Sample Distance calculations
-run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, scale_type = "none") {
-  
-  # Remove all non-numeric columns
-  expr <- counts[, !(colnames(counts) %in% c("gene_id", "gene_name"))]
-  
-  # Remove user-selected samples
-  if (!is.null(remove_samples)) {
-    expr <- expr[, !(colnames(expr) %in% remove_samples), drop = FALSE]
-  }
-  
-  # Filter out zero-variance genes
-  expr <- expr[apply(expr, 1, var) > 0, , drop = FALSE]
-  
-  # Apply scaling if requested
-  if (scale_type == "row") {
-    expr <- t(scale(t(expr)))   # scale each gene
-  } else if (scale_type == "column") {
-    expr <- scale(expr)         # scale each sample
-  } else if (scale_type == "log") {
-    expr <- log10(expr + 1)     # avoid log(0)
-  }
-  
-  # Compute Euclidean distance between samples
-  dist_matrix <- dist(t(expr), method = "euclidean")
-  dist_matrix <- as.matrix(dist_matrix)
-  
-  # Set sample names
-  rownames(dist_matrix) <- colnames(expr)
-  colnames(dist_matrix) <- colnames(expr)
-  
-  return(dist_matrix)
-}
-
-
-# Plot Sample Distance Heatmap
 plot_sample_distance_heatmap <- function(dist_matrix,
                                          metadata = NULL,
                                          color_scheme = "Dark2",
                                          cluster = "none",
                                          dendrogram = "none",
-                                         show_names = "both",
+                                         show_names = "both",  # "none", "x", "y", or "both"
+                                         scaling = "none",
                                          color_by = NULL,
                                          heatmap_type = "ggplot") {
   
   dist_matrix <- as.matrix(dist_matrix)
+  
+  # ---- Optional scaling ----
+  if (tolower(scaling) == "row") {
+    dist_matrix <- t(scale(t(dist_matrix)))
+  } else if (tolower(scaling) == "column") {
+    dist_matrix <- scale(dist_matrix)
+  } else if (tolower(scaling) == "log") {
+    dist_matrix <- log10(dist_matrix + 1)
+  }
+  
+  # Replace NaNs
+  dist_matrix[is.na(dist_matrix)] <- 0
   
   # ---- Optional annotation from metadata ----
   ann_colors <- NULL
@@ -705,18 +682,25 @@ plot_sample_distance_heatmap <- function(dist_matrix,
       labs(title = "Sample Distance Heatmap", x = "", y = "") +
       theme_minimal() +
       theme(
-        axis.text.x = if (show_names %in% c("both", "x")) element_text(angle = 90, hjust = 1, size = 8) else element_blank(),
-        axis.text.y = if (show_names %in% c("both", "y")) element_text(size = 8) else element_blank(),
-        panel.grid = element_blank()
+        panel.grid = element_blank(),
+        axis.text.x = element_text(angle = 90, hjust = 1, size = 8),
+        axis.text.y = element_text(size = 8)
       )
+    
+    # Conditionally hide axis text AFTER creating the base theme
+    if (show_names == "none") {
+      p <- p + theme(axis.text.x = element_blank(), axis.text.y = element_blank())
+    } else if (show_names == "x") {
+      p <- p + theme(axis.text.y = element_blank())
+    } else if (show_names == "y") {
+      p <- p + theme(axis.text.x = element_blank())
+    }
     
     return(p)
   }
   
   # ---- INTERACTIVE HEATMAPLY VERSION ----
-  else if (heatmap_type == "heatmaply") {
-    library(heatmaply)
-    library(RColorBrewer)
+  else if (tolower(heatmap_type) == "heatmaply") {
     
     # Create annotation colors if metadata exists
     side_colors <- NULL
@@ -725,11 +709,10 @@ plot_sample_distance_heatmap <- function(dist_matrix,
       rownames(side_colors) <- ann_colors$sample_id
     }
     
-    # Handle independent clustering/dendrogram options
+    # Handle clustering and dendrogram independently
     show_rowv <- cluster %in% c("row", "both")
     show_colv <- cluster %in% c("column", "both")
     
-    # Turn off dendrograms unless explicitly requested
     if (dendrogram == "none") {
       show_rowv <- FALSE
       show_colv <- FALSE
@@ -744,16 +727,35 @@ plot_sample_distance_heatmap <- function(dist_matrix,
       show_colv <- TRUE
     }
     
+    # ---- Control axis labels ----
+    if (show_names == "none") {
+      labRow <- NULL
+      labCol <- NULL
+    } else if (show_names == "x") {
+      labRow <- rownames(dist_matrix)
+      labCol <- NULL
+    } else if (show_names == "y") {
+      labRow <- NULL
+      labCol <- colnames(dist_matrix)
+    } else { # both or NULL fallback
+      labRow <- rownames(dist_matrix)
+      labCol <- colnames(dist_matrix)
+    }
+    
+    # ---- Build the interactive heatmap ----
     heatmaply::heatmaply(
       dist_matrix,
       colors = colorRampPalette(brewer.pal(9, color_scheme))(256),
       Rowv = show_rowv,
       Colv = show_colv,
-      labRow = if (show_names %in% c("both", "y")) rownames(dist_matrix) else NULL,
-      labCol = if (show_names %in% c("both", "x")) colnames(dist_matrix) else NULL,
+      labRow = labRow,
+      labCol = labCol,
       main = "Sample Distance Heatmap",
       row_side_colors = side_colors,
-      col_side_colors = side_colors
+      col_side_colors = side_colors,
+      showticklabels = c(!is.null(labRow), !is.null(labCol)) # ensures axes update dynamically
     )
   }
-}
+}  
+
+
