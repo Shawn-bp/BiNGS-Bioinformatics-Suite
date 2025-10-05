@@ -170,6 +170,13 @@ ui <- fluidPage(
                       options = list(`actions-box` = TRUE),
                       multiple = FALSE
                     ),
+                    radioButtons("sample_distance_heatmap_show_names",
+                                 "Show sample names:",
+                                 choices = list("None" = "none",
+                                                "X-axis only" = "x",
+                                                "Y-axis only" = "y",
+                                                "Both" = "both"),
+                                 selected = "both"),
                     radioButtons("sample_distance_heatmap_color_palette",
                                  "Select the color palette to use:",
                                  choices = as.list(color_palette_list),
@@ -390,7 +397,7 @@ server <- function(input, output, session) {
   })
   
   observeEvent(sample_metadata(), {
-    updateSelectizeInput(session, "metadata_color_bars", label = "Select etadata field to color by:",
+    updateSelectizeInput(session, "metadata_color_bars", label = "Select metadata field to color by:",
                          choices = setdiff(colnames(sample_metadata()), metadata_columns_to_remove),
                          selected = if ("condition" %in% colnames(sample_metadata())) "condition" else setdiff(colnames(sample_metadata()), metadata_columns_to_remove)[1],
                          server = TRUE)
@@ -411,72 +418,53 @@ server <- function(input, output, session) {
   
   # ---- Render static ggplot heatmap ----
   output$sample_distance_heatmap <- renderPlot({
-    req(dist_matrix_reactive())
-    dist_mat <- dist_matrix_reactive()
-    
-    # Optionally subset samples_x_var / samples_y_var (if user selected specific)
-    sel_x <- input$samples_x_var
-    sel_y <- input$samples_y_var
-    # If UI select inputs are single (non-multiple) you provided, allow NULL or single
-    if (!is.null(sel_x) && length(sel_x) > 0) {
-      keep_cols_x <- intersect(colnames(dist_mat), sel_x)
-    } else {
-      keep_cols_x <- colnames(dist_mat)
-    }
-    if (!is.null(sel_y) && length(sel_y) > 0) {
-      keep_cols_y <- intersect(rownames(dist_mat), sel_y)
-    } else {
-      keep_cols_y <- rownames(dist_mat)
-    }
-    # subset and re-order to selected axes intersection
-    sub_mat <- dist_mat[keep_cols_y, keep_cols_x, drop = FALSE]
-    
-    # Create static ggplot heatmap via your helper
-    p <- plot_sample_distance_heatmap(
-      dist_matrix = sub_mat,
-      metadata = sample_metadata(),
-      color_scheme = input$sample_distance_heatmap_color_palette,
-      cluster = input$sample_distance_heatmap_clustering_type,
-      dendrogram = input$sample_distance_heatmap_dendrogram_list,
-      show_names = "both",
-      color_by = input$metadata_color_bars,
-      heatmap_type = "ggplot"
-    )
-    print(p)
-  })
-  
-  # ---- Render interactive heatmaply ----
-  output$sample_distance_heatmaply <- renderPlotly({
-    req(dist_matrix_reactive())
-    dist_mat <- dist_matrix_reactive()
-    
-    sel_x <- input$samples_x_var
-    sel_y <- input$samples_y_var
-    if (!is.null(sel_x) && length(sel_x) > 0) {
-      keep_cols_x <- intersect(colnames(dist_mat), sel_x)
-    } else {
-      keep_cols_x <- colnames(dist_mat)
-    }
-    if (!is.null(sel_y) && length(sel_y) > 0) {
-      keep_cols_y <- intersect(rownames(dist_mat), sel_y)
-    } else {
-      keep_cols_y <- rownames(dist_mat)
-    }
-    sub_mat <- dist_mat[keep_cols_y, keep_cols_x, drop = FALSE]
-    
-    hm <- plot_sample_distance_heatmap(
-      dist_matrix = sub_mat,
-      metadata = sample_metadata(),
-      color_scheme = input$sample_distance_heatmap_color_palette,
-      cluster = input$sample_distance_heatmap_clustering_type,
-      dendrogram = input$sample_distance_heatmap_dendrogram_list,
-      show_names = "both",
-      color_by = input$metadata_color_bars,
-      heatmap_type = "heatmaply"
-    )
-    # heatmaply returns an htmlwidget (plotly); return it directly
-    return(hm)
-  })
+  req(dist_matrix_reactive())
+  dist_mat <- dist_matrix_reactive()
+  sel_x <- input$samples_x_var
+  sel_y <- input$samples_y_var
+
+  keep_cols_x <- if (!is.null(sel_x) && length(sel_x) > 0) intersect(colnames(dist_mat), sel_x) else colnames(dist_mat)
+  keep_cols_y <- if (!is.null(sel_y) && length(sel_y) > 0) intersect(rownames(dist_mat), sel_y) else rownames(dist_mat)
+  sub_mat <- dist_mat[keep_cols_y, keep_cols_x, drop = FALSE]
+
+  p <- plot_sample_distance_heatmap(
+    dist_matrix = sub_mat,
+    metadata = sample_metadata(),
+    color_scheme = input$sample_distance_heatmap_color_palette,
+    cluster = input$sample_distance_heatmap_clustering_type,
+    dendrogram = input$sample_distance_heatmap_dendrogram_list,
+    show_names = input$sample_distance_heatmap_show_names,
+    scaling = input$sample_distance_heatmap_scaling_type,
+    color_by = input$metadata_color_bars,
+    heatmap_type = "ggplot"
+  )
+  print(p)
+})
+
+# heatmaply render
+output$sample_distance_heatmaply <- renderPlotly({
+  req(dist_matrix_reactive())
+  dist_mat <- dist_matrix_reactive()
+  sel_x <- input$samples_x_var
+  sel_y <- input$samples_y_var
+
+  keep_cols_x <- if (!is.null(sel_x) && length(sel_x) > 0) intersect(colnames(dist_mat), sel_x) else colnames(dist_mat)
+  keep_cols_y <- if (!is.null(sel_y) && length(sel_y) > 0) intersect(rownames(dist_mat), sel_y) else rownames(dist_mat)
+  sub_mat <- dist_mat[keep_cols_y, keep_cols_x, drop = FALSE]
+
+  hm <- plot_sample_distance_heatmap(
+    dist_matrix = sub_mat,
+    metadata = sample_metadata(),
+    color_scheme = input$sample_distance_heatmap_color_palette,
+    cluster = input$sample_distance_heatmap_clustering_type,
+    dendrogram = input$sample_distance_heatmap_dendrogram_list,
+    show_names = input$sample_distance_heatmap_show_names,
+    scaling = input$sample_distance_heatmap_scaling_type,
+    color_by = input$metadata_color_bars,
+    heatmap_type = "heatmaply"
+  )
+  return(hm)
+})
   
   # ---- Download distance matrix ----
   output$download_distance_matrix <- downloadHandler(
