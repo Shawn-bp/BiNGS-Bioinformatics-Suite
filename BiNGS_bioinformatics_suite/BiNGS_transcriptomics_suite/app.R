@@ -385,11 +385,17 @@ server <- function(input, output, session) {
   
   observeEvent(sample_metadata(), {
     md_choices <- colnames(sample_metadata())
-    # exclude sample_id from color choices (but you can include it if desired)
     md_choices_no_id <- setdiff(md_choices, "sample_id")
     updateSelectizeInput(session, "metadata_color_bars", choices = md_choices_no_id, selected = if ("condition" %in% md_choices_no_id) "condition" else md_choices_no_id[1], server = TRUE)
   })
   
+  observeEvent(sample_metadata(), {
+    updateSelectizeInput(session, "metadata_color_bars", label = "Select etadata field to color by:",
+                         choices = setdiff(colnames(sample_metadata()), metadata_columns_to_remove),
+                         selected = if ("condition" %in% colnames(sample_metadata())) "condition" else setdiff(colnames(sample_metadata()), metadata_columns_to_remove)[1],
+                         server = TRUE)
+  })
+    
   # ---- Reactive: compute distance matrix on button press ----
   dist_matrix_reactive <- eventReactive(input$sample_distance_run_button, {
     req(count_data(), sample_metadata())
