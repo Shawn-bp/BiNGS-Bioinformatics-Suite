@@ -28,194 +28,275 @@ ui <- fluidPage(
              fluidRow(
                column(3,
                       selectizeInput(
-               'x_pc',
-               label = "X axis PC",
-               choices = NULL,
-               selected = NULL, 
-               options = list(`actions-box` = TRUE),
-               multiple = FALSE
-             ),
-             selectizeInput(
-               'y_pc',
-               label = "Y axis PC",
-               choices = NULL,
-               selected = NULL, 
-               options = list(`actions-box` = TRUE),
-               multiple = FALSE
-             ),
-             selectizeInput(
-               "color_var",
-               label = "Color samples by:",
-               choices = NULL,
-               options = list(`actions-box` = TRUE),
-               multiple = FALSE
-             ),
-             radioButtons("pca_color_palette",
-                          "Select the color palette to use:",
-                          choices = as.list(color_palette_list),
-                          selected = color_palette_list[[1]]),
-             radioButtons("PCA_Plot_type",
-                          "Plotly or GGplot:",
-                          choices = as.list(type_list),
-                          selected = type_list[[1]]),
-             actionButton("PCA_run_button", "Create PCA", 
-                          style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
-             br(), 
-             br(), 
-             br(),
-             downloadButton("download_PCA", "Download_PCA_coords.csv"),
-             br(), 
-             br(),
-             downloadButton("download_variance", "Download_variance_table.csv")
+                        'x_pc',
+                        label = "X axis PC",
+                        choices = NULL,
+                        selected = NULL, 
+                        options = list(`actions-box` = TRUE),
+                        multiple = FALSE
+                      ),
+                      selectizeInput(
+                        'y_pc',
+                        label = "Y axis PC",
+                        choices = NULL,
+                        selected = NULL, 
+                        options = list(`actions-box` = TRUE),
+                        multiple = FALSE
+                      ),
+                      selectizeInput(
+                        "color_var",
+                        label = "Color samples by:",
+                        choices = NULL,
+                        options = list(`actions-box` = TRUE),
+                        multiple = FALSE
+                      ),
+                      radioButtons("pca_color_palette",
+                                   "Select the color palette to use:",
+                                   choices = as.list(color_palette_list),
+                                   selected = color_palette_list[[1]]),
+                      radioButtons("PCA_Plot_type",
+                                   "Plotly or GGplot:",
+                                   choices = as.list(type_list),
+                                   selected = type_list[[1]]),
+                      actionButton("PCA_run_button", "Create PCA", 
+                                   style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
+                      br(), 
+                      br(), 
+                      br(),
+                      downloadButton("download_PCA", "Download_PCA_coords.csv"),
+                      br(), 
+                      br(),
+                      downloadButton("download_variance", "Download_variance_table.csv")
                ),
-    # ------------------ PCA outputs ------------------
-             column(9,
-             conditionalPanel("input.PCA_Plot_type == 'plotly'",
-                                plotlyOutput("pca_plotly", height = "600px")),
-             conditionalPanel("input.PCA_Plot_type == 'ggplot'",
-                                plotOutput("pca_ggplot", height = "600px")),
-               
-               h3("Variance Explained"),
-               DT::dataTableOutput("pca_variance")
-             ),
+               # ------------------ PCA outputs ------------------
+               column(9,
+                      conditionalPanel("input.PCA_Plot_type == 'plotly'",
+                                       plotlyOutput("pca_plotly", height = "600px")),
+                      conditionalPanel("input.PCA_Plot_type == 'ggplot'",
+                                       plotOutput("pca_ggplot", height = "600px")),
+                      
+                      h3("Variance Explained"),
+                      DT::dataTableOutput("pca_variance")
+               ),
              )
     ),
     # ------------------ BOXPLOT TAB ------------------
     tabPanel("Boxplot",
              fluidRow(
                column(3,
-               selectizeInput(
-               'gene_var',
-               label = "Select Gene:",
-               choices = NULL,
-               options = list(`actions-box` = TRUE),
-               multiple = FALSE
-             ),
-             selectizeInput(
-               'fact_var',
-               label = "Sample groups",
-               choices = NULL,
-               selected = NULL, 
-               options = list(`actions-box` = TRUE),
-               multiple = FALSE
-             ),
-             radioButtons("boxplot_color_palette",
-                          "Select the color palette to use:",
-                          choices = as.list(color_palette_list),
-                          selected = color_palette_list[[1]]),
-             radioButtons("QC_check",
-                          "Remove low quality samples:",
-                          choices = as.list(QC_list),
-                          selected = QC_list[[1]]),
-             radioButtons("Log",
-                          "Log expression:",
-                          choices = as.list(Log_list),
-                          selected = Log_list[[1]]),
-             radioButtons("Boxplot_Plot_type",
-                          "Plotly or GGplot:",
-                          choices = as.list(type_list),
-                          selected = type_list[[1]]),
-             radioButtons("Box_violin",
-                          "Plot type:",
-                          choices = as.list(box_plot_list),
-                          selected = box_plot_list[[1]]),
-             br(),
-             actionButton("run_button", "Create Boxplot", 
-                          style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
-             br(), 
-             br(), 
-             br(),
-             downloadButton("download_exp", "Download_expression.csv"),
-             br(), 
-             br(),
-             downloadButton("download_pval", "Download_pvalue_table.csv"),
+                      selectizeInput(
+                        'gene_var',
+                        label = "Select Gene:",
+                        choices = NULL,
+                        options = list(`actions-box` = TRUE),
+                        multiple = FALSE
+                      ),
+                      selectizeInput(
+                        'fact_var',
+                        label = "Sample groups",
+                        choices = NULL,
+                        selected = NULL, 
+                        options = list(`actions-box` = TRUE),
+                        multiple = FALSE
+                      ),
+                      radioButtons("boxplot_color_palette",
+                                   "Select the color palette to use:",
+                                   choices = as.list(color_palette_list),
+                                   selected = color_palette_list[[1]]),
+                      radioButtons("QC_check",
+                                   "Remove low quality samples:",
+                                   choices = as.list(QC_list),
+                                   selected = QC_list[[1]]),
+                      radioButtons("Log",
+                                   "Log expression:",
+                                   choices = as.list(Log_list),
+                                   selected = Log_list[[1]]),
+                      radioButtons("Boxplot_Plot_type",
+                                   "Plotly or GGplot:",
+                                   choices = as.list(type_list),
+                                   selected = type_list[[1]]),
+                      radioButtons("Box_violin",
+                                   "Plot type:",
+                                   choices = as.list(box_plot_list),
+                                   selected = box_plot_list[[1]]),
+                      br(),
+                      actionButton("run_button", "Create Boxplot", 
+                                   style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
+                      br(), 
+                      br(), 
+                      br(),
+                      downloadButton("download_exp", "Download_expression.csv"),
+                      br(), 
+                      br(),
+                      downloadButton("download_pval", "Download_pvalue_table.csv"),
                ),
-             # ------------------ BOXPLOT OUTPUTS ------------------
-             column(9, 
-             conditionalPanel(condition = "input.Boxplot_Plot_type == 'plotly'",
-                              plotlyOutput("boxplot_plotly")),
-             conditionalPanel(condition = "input.Boxplot_Plot_type == 'ggplot'",
-                              plotOutput("boxplot_ggplot")),
-             h3("P-value Table"),
-             DT::dataTableOutput("table_p"),
-             h3("ANOVA Table"),
-             DT::dataTableOutput("table_panova"),
-             h3("Gene Expression Table"),
-             DT::dataTableOutput("table_data")
-             ),
+               # ------------------ BOXPLOT OUTPUTS ------------------
+               column(9, 
+                      conditionalPanel(condition = "input.Boxplot_Plot_type == 'plotly'",
+                                       plotlyOutput("boxplot_plotly")),
+                      conditionalPanel(condition = "input.Boxplot_Plot_type == 'ggplot'",
+                                       plotOutput("boxplot_ggplot")),
+                      h3("P-value Table"),
+                      DT::dataTableOutput("table_p"),
+                      h3("ANOVA Table"),
+                      DT::dataTableOutput("table_panova"),
+                      h3("Gene Expression Table"),
+                      DT::dataTableOutput("table_data")
+               ),
              )
     ),
-  # ------------------ HEATMAP TABS ------------------
-  tabPanel("Sample Distance Heatmap",
-           fluidRow(
-             column(3,
-                    selectizeInput(
-                      'samples_x_var',
-                      label = "Select samples on X-axis:",
-                      choices = NULL,
-                      options = list(`actions-box` = TRUE),
-                      multiple = TRUE
-                    ),
-                    selectizeInput(
-                      'samples_y_var',
-                      label = "Select samples on Y-axis:",
-                      choices = NULL,
-                      options = list(`actions-box` = TRUE),
-                      multiple = TRUE
-                    ),
-                    selectizeInput(
-                      'metadata_color_bars',
-                      label = "Select metadata field to color by:",
-                      choices = NULL,
-                      options = list(`actions-box` = TRUE),
-                      multiple = FALSE
-                    ),
-                    radioButtons("sample_distance_heatmap_show_names",
-                                 "Show sample names:",
-                                 choices = list("None" = "none",
-                                                "X-axis only" = "x",
-                                                "Y-axis only" = "y",
-                                                "Both" = "both"),
-                                 selected = "both"),
-                    radioButtons("sample_distance_heatmap_color_palette",
-                                 "Select the color palette to use:",
-                                 choices = as.list(color_palette_list),
-                                 selected = color_palette_list[[1]]),
-                    radioButtons("sample_distance_heatmap_scaling_type",
-                                 "Select the type of scaling to perform:",
-                                 choices = as.list(scaling_list),
-                                 selected = scaling_list[[1]]),
-                    radioButtons("sample_distance_heatmap_clustering_type",
-                                 "Select the type of clustering to perform:",
-                                 choices = as.list(clustering_list),
-                                 selected = clustering_list[[1]]),
-                    radioButtons("sample_distance_heatmap_dendrogram_list",
-                                 "Select the dendrograms to show:",
-                                 choices = as.list(dendrogram_list),
-                                 selected = dendrogram_list[[1]]),
-                    radioButtons("Sample_Distance_Heatmap_Plot_type",
-                                 "Heatmaply or GGplot:",
-                                 choices = as.list(heatmap_type_list),
-                                 selected = heatmap_type_list[[1]]),
-                    br(),
-                    actionButton("sample_distance_run_button", "Create Heatmap", 
-                                 style="color: #fff; background-color: #337ab7; border-color: #2e6da4")
-             ),
-             # ------------------ HEATMAP OUTPUTS ------------------
-             column(9,
-                    conditionalPanel(
-                      "input.Sample_Distance_Heatmap_Plot_type == 'ggplot'",
-                      plotOutput("sample_distance_heatmap", height = "700px")
-                    ),
-                    conditionalPanel(
-                      "input.Sample_Distance_Heatmap_Plot_type == 'heatmaply'",
-                      plotlyOutput("sample_distance_heatmaply", height = "700px")
-                    ))
-           )
-  ),
+    # ------------------ HEATMAP TABS ------------------
+    tabPanel("Sample Distance Heatmap",
+             fluidRow(
+               column(3,
+                      selectizeInput(
+                        'samples_x_var',
+                        label = "Select samples on X-axis:",
+                        choices = NULL,
+                        options = list(`actions-box` = TRUE),
+                        multiple = TRUE
+                      ),
+                      selectizeInput(
+                        'samples_y_var',
+                        label = "Select samples on Y-axis:",
+                        choices = NULL,
+                        options = list(`actions-box` = TRUE),
+                        multiple = TRUE
+                      ),
+                      selectizeInput(
+                        'metadata_color_bars',
+                        label = "Select metadata field to color by:",
+                        choices = NULL,
+                        options = list(`actions-box` = TRUE),
+                        multiple = FALSE
+                      ),
+                      radioButtons("sample_distance_heatmap_show_names",
+                                   "Show sample names:",
+                                   choices = list("None" = "none",
+                                                  "X-axis only" = "x",
+                                                  "Y-axis only" = "y",
+                                                  "Both" = "both"),
+                                   selected = "both"),
+                      radioButtons("sample_distance_heatmap_color_palette",
+                                   "Select the color palette to use:",
+                                   choices = as.list(heatmap_color_scheme_list),
+                                   selected = heatmap_color_scheme_list[[1]]),
+                      radioButtons("sample_distance_heatmap_scaling_type",
+                                   "Select the type of scaling to perform:",
+                                   choices = as.list(scaling_list),
+                                   selected = scaling_list[[1]]),
+                      radioButtons("sample_distance_heatmap_clustering_type",
+                                   "Select the type of clustering to perform:",
+                                   choices = as.list(clustering_list),
+                                   selected = clustering_list[[1]]),
+                      radioButtons("sample_distance_heatmap_dendrogram_list",
+                                   "Select the dendrograms to show:",
+                                   choices = as.list(dendrogram_list),
+                                   selected = dendrogram_list[[1]]),
+                      radioButtons("Sample_Distance_Heatmap_Plot_type",
+                                   "Heatmaply or GGplot:",
+                                   choices = as.list(heatmap_type_list),
+                                   selected = heatmap_type_list[[1]]),
+                      br(),
+                      actionButton("sample_distance_run_button", "Create Heatmap", 
+                                   style="color: #fff; background-color: #337ab7; border-color: #2e6da4")
+               ),
+               # ------------------ HEATMAP OUTPUTS ------------------
+               column(9,
+                      conditionalPanel(
+                        "input.Sample_Distance_Heatmap_Plot_type == 'ggplot'",
+                        plotOutput("sample_distance_heatmap", height = "700px")
+                      ),
+                      conditionalPanel(
+                        "input.Sample_Distance_Heatmap_Plot_type == 'heatmaply'",
+                        plotlyOutput("sample_distance_heatmaply", height = "700px")
+                      ))
+             )
+    ),
     tabPanel("Gene Expression Heatmap",
-             plotOutput("gene_expression_heatmap_plot")
-    )
+             fluidRow(
+               column(3,
+                      selectizeInput(
+                        'gene_list_select',
+                        label = "Select genes:",
+                        choices = NULL,
+                        selected = NULL,
+                        options = list(
+                          `actions-box` = TRUE,
+                          placeholder = "Select one or more genes"
+                        ),
+                        multiple = TRUE
+                      ),
+                      selectizeInput(
+                        'samples_to_remove_select',
+                        label = "Select samples to remove (optional):",
+                        choices = NULL,
+                        selected = NULL,
+                        options = list(
+                          `actions-box` = TRUE,
+                          placeholder = "Select samples to exclude"
+                        ),
+                        multiple = TRUE
+                      ),
+                      textInput(
+                        'gene_heatmap_title',
+                        label = "Heatmap title:",
+                        value = "Gene Expression Heatmap"
+                      ),
+                      selectizeInput(
+                        'gene_heatmap_color_by',
+                        label = "Color samples by:",
+                        choices = NULL,
+                        options = list(`actions-box` = TRUE),
+                        multiple = FALSE
+                      ),
+                      radioButtons("gene_heatmap_sidebar_color_palette",
+                                   "Sidebar color palette:",
+                                   choices = as.list(color_palette_list),
+                                   selected = color_palette_list[[1]]),
+                      radioButtons("gene_heatmap_color_scheme",
+                                   "Heatmap color scheme:",
+                                   choices = as.list(heatmap_color_scheme_list),
+                                   selected = heatmap_color_scheme_list[[1]]),
+                      radioButtons("gene_heatmap_scaling_type",
+                                   "Scaling:",
+                                   choices = as.list(scaling_list),
+                                   selected = scaling_list[[1]]),
+                      radioButtons("gene_heatmap_clustering_type",
+                                   "Clustering:",
+                                   choices = as.list(clustering_list),
+                                   selected = clustering_list[[4]]),
+                      radioButtons("gene_heatmap_dendrogram_list",
+                                   "Dendrograms:",
+                                   choices = as.list(dendrogram_list),
+                                   selected = dendrogram_list[[4]]),
+                      radioButtons("gene_heatmap_show_names",
+                                   "Show names:",
+                                   choices = as.list(show_names_list),
+                                   selected = show_names_list[[4]]),
+                      radioButtons("gene_heatmap_plot_type",
+                                   "Plot type:",
+                                   choices = as.list(heatmap_type_list),
+                                   selected = heatmap_type_list[[1]]),
+                      br(),
+                      actionButton("gene_heatmap_run_button", "Plot Heatmap", 
+                                   style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
+                      br(),
+                      br(),
+                      downloadButton("download_gene_heatmap_data", "Download_heatmap_data.csv")
+               ),
+               column(9,
+                      conditionalPanel(
+                        "input.gene_heatmap_plot_type == 'ggplot'",
+                        plotOutput("gene_expression_heatmap_ggplot", height = "700px")
+                      ),
+                      conditionalPanel(
+                        "input.gene_heatmap_plot_type == 'heatmaply'",
+                        plotlyOutput("gene_expression_heatmap_heatmaply", height = "700px")
+                      )
+               )
+             )
+      )
   )
 )
 server <- function(input, output, session) {
@@ -402,7 +483,7 @@ server <- function(input, output, session) {
                          selected = if ("condition" %in% colnames(sample_metadata())) "condition" else setdiff(colnames(sample_metadata()), metadata_columns_to_remove)[1],
                          server = TRUE)
   })
-    
+  
   # ---- Reactive: compute distance matrix on button press ----
   dist_matrix_reactive <- eventReactive(input$sample_distance_run_button, {
     req(count_data(), sample_metadata())
@@ -418,53 +499,53 @@ server <- function(input, output, session) {
   
   # ---- Render static ggplot heatmap ----
   output$sample_distance_heatmap <- renderPlot({
-  req(dist_matrix_reactive())
-  dist_mat <- dist_matrix_reactive()
-  sel_x <- input$samples_x_var
-  sel_y <- input$samples_y_var
-
-  keep_cols_x <- if (!is.null(sel_x) && length(sel_x) > 0) intersect(colnames(dist_mat), sel_x) else colnames(dist_mat)
-  keep_cols_y <- if (!is.null(sel_y) && length(sel_y) > 0) intersect(rownames(dist_mat), sel_y) else rownames(dist_mat)
-  sub_mat <- dist_mat[keep_cols_y, keep_cols_x, drop = FALSE]
-
-  p <- plot_sample_distance_heatmap(
-    dist_matrix = sub_mat,
-    metadata = sample_metadata(),
-    color_scheme = input$sample_distance_heatmap_color_palette,
-    cluster = input$sample_distance_heatmap_clustering_type,
-    dendrogram = input$sample_distance_heatmap_dendrogram_list,
-    show_names = input$sample_distance_heatmap_show_names,
-    scaling = input$sample_distance_heatmap_scaling_type,
-    color_by = input$metadata_color_bars,
-    heatmap_type = "ggplot"
-  )
-  print(p)
-})
-
-# heatmaply render
-output$sample_distance_heatmaply <- renderPlotly({
-  req(dist_matrix_reactive())
-  dist_mat <- dist_matrix_reactive()
-  sel_x <- input$samples_x_var
-  sel_y <- input$samples_y_var
-
-  keep_cols_x <- if (!is.null(sel_x) && length(sel_x) > 0) intersect(colnames(dist_mat), sel_x) else colnames(dist_mat)
-  keep_cols_y <- if (!is.null(sel_y) && length(sel_y) > 0) intersect(rownames(dist_mat), sel_y) else rownames(dist_mat)
-  sub_mat <- dist_mat[keep_cols_y, keep_cols_x, drop = FALSE]
-
-  hm <- plot_sample_distance_heatmap(
-    dist_matrix = sub_mat,
-    metadata = sample_metadata(),
-    color_scheme = input$sample_distance_heatmap_color_palette,
-    cluster = input$sample_distance_heatmap_clustering_type,
-    dendrogram = input$sample_distance_heatmap_dendrogram_list,
-    show_names = input$sample_distance_heatmap_show_names,
-    scaling = input$sample_distance_heatmap_scaling_type,
-    color_by = input$metadata_color_bars,
-    heatmap_type = "heatmaply"
-  )
-  return(hm)
-})
+    req(dist_matrix_reactive())
+    dist_mat <- dist_matrix_reactive()
+    sel_x <- input$samples_x_var
+    sel_y <- input$samples_y_var
+    
+    keep_cols_x <- if (!is.null(sel_x) && length(sel_x) > 0) intersect(colnames(dist_mat), sel_x) else colnames(dist_mat)
+    keep_cols_y <- if (!is.null(sel_y) && length(sel_y) > 0) intersect(rownames(dist_mat), sel_y) else rownames(dist_mat)
+    sub_mat <- dist_mat[keep_cols_y, keep_cols_x, drop = FALSE]
+    
+    p <- plot_sample_distance_heatmap(
+      dist_matrix = sub_mat,
+      metadata = sample_metadata(),
+      color_scheme = input$sample_distance_heatmap_color_palette,
+      cluster = input$sample_distance_heatmap_clustering_type,
+      dendrogram = input$sample_distance_heatmap_dendrogram_list,
+      show_names = input$sample_distance_heatmap_show_names,
+      scaling = input$sample_distance_heatmap_scaling_type,
+      color_by = input$metadata_color_bars,
+      heatmap_type = "ggplot"
+    )
+    print(p)
+  })
+  
+  # heatmaply render
+  output$sample_distance_heatmaply <- renderPlotly({
+    req(dist_matrix_reactive())
+    dist_mat <- dist_matrix_reactive()
+    sel_x <- input$samples_x_var
+    sel_y <- input$samples_y_var
+    
+    keep_cols_x <- if (!is.null(sel_x) && length(sel_x) > 0) intersect(colnames(dist_mat), sel_x) else colnames(dist_mat)
+    keep_cols_y <- if (!is.null(sel_y) && length(sel_y) > 0) intersect(rownames(dist_mat), sel_y) else rownames(dist_mat)
+    sub_mat <- dist_mat[keep_cols_y, keep_cols_x, drop = FALSE]
+    
+    hm <- plot_sample_distance_heatmap(
+      dist_matrix = sub_mat,
+      metadata = sample_metadata(),
+      color_scheme = input$sample_distance_heatmap_color_palette,
+      cluster = input$sample_distance_heatmap_clustering_type,
+      dendrogram = input$sample_distance_heatmap_dendrogram_list,
+      show_names = input$sample_distance_heatmap_show_names,
+      scaling = input$sample_distance_heatmap_scaling_type,
+      color_by = input$metadata_color_bars,
+      heatmap_type = "heatmaply"
+    )
+    return(hm)
+  })
   
   # ---- Download distance matrix ----
   output$download_distance_matrix <- downloadHandler(
@@ -472,6 +553,109 @@ output$sample_distance_heatmaply <- renderPlotly({
     content = function(file) {
       req(dist_matrix_reactive())
       write.csv(dist_matrix_reactive(), file, row.names = TRUE)
+    }
+  )
+  
+  # ------------------ GENE EXPRESSION HEATMAP ------------------
+  
+  # Update gene list choices when count data loads
+  observeEvent(count_data(), {
+    gene_choices <- if ("gene_name" %in% colnames(count_data())) {
+      unique(count_data()$gene_name)
+    } else {
+      rownames(count_data())
+    }
+    updateSelectizeInput(session, "gene_list_select", 
+                         label = "Select genes:",
+                         choices = gene_choices,
+                         selected = NULL,
+                         server = TRUE)
+    
+    # Update sample removal choices (exclude gene_id/gene_name columns)
+    sample_choices <- colnames(count_data())
+    sample_choices <- sample_choices[!sample_choices %in% c("gene_id", "gene_name")]
+    updateSelectizeInput(session, "samples_to_remove_select",
+                         label = "Select samples to remove (optional):",
+                         choices = sample_choices,
+                         selected = NULL,
+                         server = TRUE)
+  })
+  
+  # Update color_by choices when metadata loads
+  observeEvent(sample_metadata(), {
+    updateSelectizeInput(session, "gene_heatmap_color_by", 
+                         label = "Color samples by:",
+                         choices = setdiff(colnames(sample_metadata()), metadata_columns_to_remove),
+                         selected = if ("condition" %in% colnames(sample_metadata())) "condition" else setdiff(colnames(sample_metadata()), metadata_columns_to_remove)[1],
+                         server = TRUE)
+  })
+  
+  # Reactive: prepare gene expression matrix on button press
+  gene_expr_matrix_reactive <- eventReactive(input$gene_heatmap_run_button, {
+    req(count_data(), sample_metadata(), input$gene_list_select)
+    
+    # Get selected genes
+    gene_list <- input$gene_list_select
+    
+    # Get samples to remove (if any selected)
+    samples_remove <- input$samples_to_remove_select
+    
+    prepare_gene_expression_matrix(
+      counts = count_data(),
+      metadata = sample_metadata(),
+      gene_list = gene_list,
+      remove_samples = samples_remove,
+      scaling = input$gene_heatmap_scaling_type
+    )
+  })
+  
+  # Render static ggplot heatmap
+  output$gene_expression_heatmap_ggplot <- renderPlot({
+    req(gene_expr_matrix_reactive())
+    
+    p <- plot_gene_expression_heatmap(
+      expr_matrix = gene_expr_matrix_reactive(),
+      metadata = sample_metadata(),
+      heatmap_title = input$gene_heatmap_title,
+      color_by = input$gene_heatmap_color_by,
+      sidebar_color_scheme = input$gene_heatmap_sidebar_color_palette,
+      heatmap_color_scheme = input$gene_heatmap_color_scheme,
+      scaling = input$gene_heatmap_scaling_type,
+      cluster = input$gene_heatmap_clustering_type,
+      dendrogram = input$gene_heatmap_dendrogram_list,
+      show_names = input$gene_heatmap_show_names,
+      heatmap_type = "ggplot"
+    )
+    print(p)
+  })
+  
+  # Render interactive heatmaply
+  output$gene_expression_heatmap_heatmaply <- renderPlotly({
+    req(gene_expr_matrix_reactive())
+    
+    plot_gene_expression_heatmap(
+      expr_matrix = gene_expr_matrix_reactive(),
+      metadata = sample_metadata(),
+      heatmap_title = input$gene_heatmap_title,
+      color_by = input$gene_heatmap_color_by,
+      sidebar_color_scheme = input$gene_heatmap_sidebar_color_palette,
+      heatmap_color_scheme = input$gene_heatmap_color_scheme,
+      scaling = input$gene_heatmap_scaling_type,
+      cluster = input$gene_heatmap_clustering_type,
+      dendrogram = input$gene_heatmap_dendrogram_list,
+      show_names = input$gene_heatmap_show_names,
+      heatmap_type = "heatmaply"
+    )
+  })
+  
+  # Download gene expression matrix
+  output$download_gene_heatmap_data <- downloadHandler(
+    filename = function() { 
+      paste0("gene_expression_heatmap_", input$gene_heatmap_scaling_type, "_", Sys.Date(), ".csv") 
+    },
+    content = function(file) {
+      req(gene_expr_matrix_reactive())
+      write.csv(gene_expr_matrix_reactive(), file, row.names = TRUE)
     }
   )
   
