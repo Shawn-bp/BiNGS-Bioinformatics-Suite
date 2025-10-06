@@ -279,7 +279,7 @@ ui <- fluidPage(
                                    choices = as.list(heatmap_type_list),
                                    selected = heatmap_type_list[[1]]),
                       br(),
-                      actionButton("gene_heatmap_run_button", "Plot Heatmap", 
+                      actionButton("gene_heatmap_run_button", "Create Heatmap", 
                                    style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
                       br(),
                       br(),
@@ -663,3 +663,4 @@ server <- function(input, output, session) {
 
 
 shinyApp(ui = ui, server = server)
+
