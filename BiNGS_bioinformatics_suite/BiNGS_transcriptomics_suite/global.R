@@ -1,3 +1,4 @@
+
 # ------------------ PCA ------------------
 # Run PCA
 run_pca <- function(counts, metadata, scale_data = TRUE) {
@@ -758,4 +759,160 @@ plot_sample_distance_heatmap <- function(dist_matrix,
   }
 }  
 
+# ------------------ GENE EXPRESSION HEATMAP ------------------
 
+prepare_gene_expression_matrix <- function(counts, 
+                                           metadata, 
+                                           gene_list, 
+                                           remove_samples = NULL,
+                                           scaling = "none") {
+  
+  # Filter to selected genes
+  if ("gene_name" %in% colnames(counts)) {
+    gene_data <- counts[counts$gene_name %in% gene_list, ]
+    rownames(gene_data) <- gene_data$gene_name
+    gene_data <- gene_data[, !colnames(gene_data) %in% c("gene_id", "gene_name"), drop = FALSE]
+  } else {
+    gene_data <- counts[rownames(counts) %in% gene_list, ]
+  }
+  
+  # Remove specified samples
+  if (!is.null(remove_samples) && length(remove_samples) > 0) {
+    keep_cols <- setdiff(colnames(gene_data), remove_samples)
+    gene_data <- gene_data[, keep_cols, drop = FALSE]
+  }
+  
+  # Convert to matrix
+  expr_matrix <- as.matrix(gene_data)
+  
+  # Apply scaling
+  if (tolower(scaling) == "row") {
+    expr_matrix <- t(scale(t(expr_matrix)))
+  } else if (tolower(scaling) == "column") {
+    expr_matrix <- scale(expr_matrix)
+  } else if (tolower(scaling) == "log") {
+    expr_matrix <- log2(expr_matrix + 1)
+  }
+  
+  # Replace NaNs with 0
+  expr_matrix[is.na(expr_matrix)] <- 0
+  
+  return(expr_matrix)
+}
+
+
+plot_gene_expression_heatmap <- function(expr_matrix,
+                                         metadata = NULL,
+                                         heatmap_title = "Gene Expression Heatmap",
+                                         color_by = NULL,
+                                         sidebar_color_scheme = "Set1",
+                                         heatmap_color_scheme = "RdYlBu",
+                                         scaling = "none",
+                                         cluster = "both",
+                                         dendrogram = "both",
+                                         show_names = "both",
+                                         heatmap_type = "ggplot") {
+  
+  expr_matrix <- as.matrix(expr_matrix)
+  
+  # ---- Optional annotation from metadata ----
+  ann_colors <- NULL
+  side_colors <- NULL
+  
+  if (!is.null(metadata) && !is.null(color_by) && color_by %in% colnames(metadata)) {
+    ann_colors <- metadata[, c("sample_id", color_by), drop = FALSE]
+    rownames(ann_colors) <- ann_colors$sample_id
+    
+    # Match to samples in matrix
+    common_samples <- intersect(colnames(expr_matrix), ann_colors$sample_id)
+    if (length(common_samples) > 0) {
+      ann_colors <- ann_colors[common_samples, , drop = FALSE]
+      side_colors <- data.frame(ann_colors[, color_by, drop = FALSE])
+      rownames(side_colors) <- ann_colors$sample_id
+    }
+  }
+  
+  # ---- STATIC GGPLOT VERSION ----
+  if (tolower(heatmap_type) == "ggplot") {
+    expr_melt <- reshape2::melt(expr_matrix)
+    colnames(expr_melt) <- c("Gene", "Sample", "Expression")
+    
+    p <- ggplot(expr_melt, aes(x = Sample, y = Gene, fill = Expression)) +
+      geom_tile() +
+      scale_fill_distiller(palette = heatmap_color_scheme, direction = -1) +
+      labs(title = heatmap_title, x = "", y = "") +
+      theme_minimal() +
+      theme(
+        panel.grid = element_blank(),
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 8),
+        axis.text.y = element_text(size = 8),
+        plot.title = element_text(hjust = 0.5)
+      )
+    
+    # Conditionally hide axis text
+    if (show_names == "none") {
+      p <- p + theme(axis.text.x = element_blank(), axis.text.y = element_blank())
+    } else if (show_names == "column" || show_names == "x") {
+      p <- p + theme(axis.text.y = element_blank())
+    } else if (show_names == "row" || show_names == "y") {
+      p <- p + theme(axis.text.x = element_blank())
+    }
+    
+    return(p)
+  }
+  
+  # ---- INTERACTIVE HEATMAPLY VERSION ----
+  else if (tolower(heatmap_type) == "heatmaply") {
+    
+    # Handle clustering and dendrogram
+    show_rowv <- cluster %in% c("row", "both")
+    show_colv <- cluster %in% c("column", "both")
+    
+    if (dendrogram == "none") {
+      show_rowv <- FALSE
+      show_colv <- FALSE
+    } else if (dendrogram == "row") {
+      show_rowv <- TRUE
+      show_colv <- FALSE
+    } else if (dendrogram == "column") {
+      show_rowv <- FALSE
+      show_colv <- TRUE
+    } else if (dendrogram == "both") {
+      show_rowv <- TRUE
+      show_colv <- TRUE
+    }
+    
+    # Control axis labels
+    if (show_names == "none") {
+      labRow <- NULL
+      labCol <- NULL
+    } else if (show_names == "column" || show_names == "x") {
+      labRow <- NULL
+      labCol <- colnames(expr_matrix)
+    } else if (show_names == "row" || show_names == "y") {
+      labRow <- rownames(expr_matrix)
+      labCol <- NULL
+    } else { # both
+      labRow <- rownames(expr_matrix)
+      labCol <- colnames(expr_matrix)
+    }
+    
+    # Build heatmap colors
+    heatmap_colors <- colorRampPalette(rev(brewer.pal(11, heatmap_color_scheme)))(256)
+    
+    # Build the interactive heatmap
+    hm <- heatmaply::heatmaply(
+      expr_matrix,
+      colors = heatmap_colors,
+      Rowv = show_rowv,
+      Colv = show_colv,
+      labRow = labRow,
+      labCol = labCol,
+      main = heatmap_title,
+      col_side_colors = side_colors,
+      showticklabels = c(!is.null(labRow), !is.null(labCol))
+    )
+    
+    return(hm)
+  }
+}
