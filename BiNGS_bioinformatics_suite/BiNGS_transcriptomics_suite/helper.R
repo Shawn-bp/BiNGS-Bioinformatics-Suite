@@ -50,3 +50,10 @@ dendrogram_list = c("None" = "none", "Row" = "row", "Column" = "column", "Both" 
 show_names_list = c("None" = "none", "Row" = "row", "Column" = "column", "Both" = "both")
 
 heatmap_type_list = c("Interactive" = "heatmaply", "Static" = "ggplot")
+
+# Gene expression heatmap specific color schemes for the heatmap itself
+heatmap_color_scheme_list = c(
+  "Red-Yellow-Blue" = "RdYlBu",
+  "Red-Blue" = "RdBu",
+  "Spectral" = "Spectral"
+)
