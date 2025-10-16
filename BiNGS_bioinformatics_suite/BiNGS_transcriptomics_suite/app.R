@@ -53,8 +53,8 @@ ui <- fluidPage(
                       ),
                       radioButtons("pca_color_palette",
                                    "Select the color palette to use:",
-                                   choices = as.list(color_palette_list),
-                                   selected = color_palette_list[[1]]),
+                                   choices = as.list(pca_color_palette_list),
+                                   selected = pca_color_palette_list[[1]]),
                       radioButtons("PCA_Plot_type",
                                    "Interactive or Static:",
                                    choices = as.list(type_list),
@@ -64,20 +64,14 @@ ui <- fluidPage(
                       br(), 
                       br(), 
                       br(),
-                      downloadButton("download_PCA", "Download_PCA_coords.csv"),
-                      br(), 
-                      br(),
-                      downloadButton("download_variance", "Download_variance_table.csv")
+                      downloadButton("download_PCA", "Download_PCA_coords.csv")
                ),
                # ------------------ PCA outputs ------------------
                column(9,
                       conditionalPanel("input.PCA_Plot_type == 'plotly'",
                                        plotlyOutput("pca_plotly", height = "600px")),
                       conditionalPanel("input.PCA_Plot_type == 'ggplot'",
-                                       plotOutput("pca_ggplot", height = "600px")),
-                      
-                      h3("Variance Explained"),
-                      DT::dataTableOutput("pca_variance")
+                                       plotOutput("pca_ggplot", height = "600px"))
                ),
              )
     ),
@@ -336,8 +330,8 @@ server <- function(input, output, session) {
   
   observeEvent(sample_metadata(), {
     updateSelectizeInput(session, "color_var", label = "Color samples by:",
-                         choices = setdiff(colnames(sample_metadata()), metadata_columns_to_remove),
-                         selected = if ("condition" %in% colnames(sample_metadata())) "condition" else setdiff(colnames(sample_metadata()), metadata_columns_to_remove)[1],
+                         choices = setdiff(colnames(sample_metadata()), pca_metadata_columns_to_remove),
+                         selected = if ("condition" %in% colnames(sample_metadata())) "condition" else setdiff(colnames(sample_metadata()), pca_metadata_columns_to_remove)[1],
                          server = TRUE)
   })
   
@@ -367,14 +361,6 @@ server <- function(input, output, session) {
         plot_type  = "plotly"
       )
     })
-    
-    output$pca_variance <- DT::renderDataTable({
-      req(pca_res())
-      data.frame(
-        PC = paste0("PC", seq_along(pca_res()$variance)),
-        Variance = round(pca_res()$variance, 2)
-      )
-    })
   })
   
   output$download_PCA <- downloadHandler(
@@ -393,15 +379,6 @@ server <- function(input, output, session) {
         export_df <- coords
       }
       write.csv(export_df, file, row.names = FALSE)
-    }
-  )
-  
-  output$download_variance <- downloadHandler(
-    filename = function() { "PCA_variance_table.csv" },
-    content = function(file) {
-      req(pca_res())
-      df <- data.frame(PC = paste0("PC", seq_along(pca_res()$variance)), Variance = pca_res()$variance)
-      write.csv(df, file, row.names = FALSE)
     }
   )
   
@@ -664,4 +641,3 @@ server <- function(input, output, session) {
 
 
 shinyApp(ui = ui, server = server)
-
