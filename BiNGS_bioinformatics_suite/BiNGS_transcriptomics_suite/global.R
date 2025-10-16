@@ -1,4 +1,5 @@
 
+
 # ------------------ PCA ------------------
 # Run PCA
 run_pca <- function(counts, metadata, scale_data = TRUE) {
@@ -26,16 +27,16 @@ run_pca <- function(counts, metadata, scale_data = TRUE) {
 
 # Plot PCA
 plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL,
-                     palette = "Set1", plot_type = "ggplot", title = "PCA Plot") {
+                     palette = "Set1", plot_type = "ggplot") {
   
   x_label <- paste0(x_pc, " (", round(variance[as.numeric(gsub("PC", "", x_pc))], 2), "%)")
   y_label <- paste0(y_pc, " (", round(variance[as.numeric(gsub("PC", "", y_pc))], 2), "%)")
   
   if (plot_type == "ggplot") {
     p <- ggplot(pca_coords, aes_string(x = x_pc, y = y_pc, color = color_var)) +
-      geom_point(size = 3) +
+      geom_point(size = 4) +
       scale_color_brewer(palette = palette) +
-      labs(x = x_label, y = y_label, title = title) +
+      labs(x = x_label, y = y_label) +
       theme_minimal()
     return(p)
     
@@ -45,12 +46,11 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL,
       x = ~get(x_pc),
       y = ~get(y_pc),
       color = if (!is.null(color_var)) pca_coords[[color_var]] else NULL,
-      colors = RColorBrewer::brewer.pal(8, palette),
+      colors = RColorBrewer::brewer.pal(3, palette),
       type = "scatter",
       mode = "markers",
       text = ~sample_id
     ) %>% plotly::layout(
-      title = title,
       xaxis = list(title = x_label),
       yaxis = list(title = y_label)
     )
