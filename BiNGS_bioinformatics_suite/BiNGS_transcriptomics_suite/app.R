@@ -29,6 +29,17 @@ ui <- fluidPage(
              fluidRow(
                column(3,
                       selectizeInput(
+                        'pca_samples_to_remove',
+                        label = "Select samples to remove:",
+                        choices = NULL,
+                        selected = NULL,
+                        options = list(
+                          `actions-box` = TRUE,
+                          placeholder = "Select samples to exclude"
+                        ),
+                        multiple = TRUE
+                      ),
+                      selectizeInput(
                         'x_pc',
                         label = "X axis PC",
                         choices = NULL,
@@ -56,7 +67,7 @@ ui <- fluidPage(
                                    choices = as.list(pca_color_palette_list),
                                    selected = pca_color_palette_list[[1]]),
                       radioButtons("PCA_Plot_type",
-                                   "Interactive or Static:",
+                                   "Interactive or static:",
                                    choices = as.list(type_list),
                                    selected = type_list[[1]]),
                       actionButton("PCA_run_button", "Create PCA", 
@@ -79,6 +90,17 @@ ui <- fluidPage(
     tabPanel("Boxplot",
              fluidRow(
                column(3,
+                      selectizeInput(
+                        'boxplot_samples_to_remove',
+                        label = "Select samples to remove:",
+                        choices = NULL,
+                        selected = NULL,
+                        options = list(
+                          `actions-box` = TRUE,
+                          placeholder = "Select samples to exclude"
+                        ),
+                        multiple = TRUE
+                      ),
                       selectizeInput(
                         'gene_var',
                         label = "Select Gene:",
@@ -107,7 +129,7 @@ ui <- fluidPage(
                                    choices = as.list(Log_list),
                                    selected = Log_list[[1]]),
                       radioButtons("Boxplot_Plot_type",
-                                   "Plotly or GGplot:",
+                                   "Interactive or static:",
                                    choices = as.list(type_list),
                                    selected = type_list[[1]]),
                       radioButtons("Box_violin",
@@ -189,7 +211,7 @@ ui <- fluidPage(
                                    choices = as.list(dendrogram_list),
                                    selected = dendrogram_list[[1]]),
                       radioButtons("Sample_Distance_Heatmap_Plot_type",
-                                   "Plot type:",
+                                   "Interactive or static:",
                                    choices = as.list(heatmap_type_list),
                                    selected = heatmap_type_list[[1]]),
                       br(),
@@ -212,6 +234,17 @@ ui <- fluidPage(
              fluidRow(
                column(3,
                       selectizeInput(
+                        'samples_to_remove_select',
+                        label = "Select samples to remove:",
+                        choices = NULL,
+                        selected = NULL,
+                        options = list(
+                          `actions-box` = TRUE,
+                          placeholder = "Select samples to exclude"
+                        ),
+                        multiple = TRUE
+                      ),
+                      selectizeInput(
                         'gene_list_select',
                         label = "Select genes:",
                         choices = NULL,
@@ -219,17 +252,6 @@ ui <- fluidPage(
                         options = list(
                           `actions-box` = TRUE,
                           placeholder = "Select one or more genes"
-                        ),
-                        multiple = TRUE
-                      ),
-                      selectizeInput(
-                        'samples_to_remove_select',
-                        label = "Select samples to remove (optional):",
-                        choices = NULL,
-                        selected = NULL,
-                        options = list(
-                          `actions-box` = TRUE,
-                          placeholder = "Select samples to exclude"
                         ),
                         multiple = TRUE
                       ),
@@ -270,7 +292,7 @@ ui <- fluidPage(
                                    choices = as.list(show_names_list),
                                    selected = show_names_list[[4]]),
                       radioButtons("gene_heatmap_plot_type",
-                                   "Plot type:",
+                                   "Interactive or static",
                                    choices = as.list(heatmap_type_list),
                                    selected = heatmap_type_list[[1]]),
                       br(),
@@ -312,10 +334,68 @@ server <- function(input, output, session) {
     return(formatted_metadata)
   })
   
+  # --- Sync sample removal across all tabs ---
+  removed_samples <- reactiveVal(NULL)
+  
+  # Update all sample removal dropdowns when data loads
+  observeEvent(count_data(), {
+    sample_choices <- colnames(count_data())
+    sample_choices <- sample_choices[!sample_choices %in% c("gene_id", "gene_name")]
+    
+    updateSelectizeInput(session, "pca_samples_to_remove", 
+                         choices = sample_choices, 
+                         selected = removed_samples(),
+                         server = TRUE)
+    updateSelectizeInput(session, "boxplot_samples_to_remove", 
+                         choices = sample_choices, 
+                         selected = removed_samples(),
+                         server = TRUE)
+    updateSelectizeInput(session, "sample_distance_samples_to_remove", 
+                         choices = sample_choices, 
+                         selected = removed_samples(),
+                         server = TRUE)
+    updateSelectizeInput(session, "samples_to_remove_select", 
+                         choices = sample_choices, 
+                         selected = removed_samples(),
+                         server = TRUE)
+  })
+  
+  # Sync PCA removal to all other tabs
+  observeEvent(input$pca_samples_to_remove, {
+    removed_samples(input$pca_samples_to_remove)
+    updateSelectizeInput(session, "boxplot_samples_to_remove", selected = input$pca_samples_to_remove)
+    updateSelectizeInput(session, "sample_distance_samples_to_remove", selected = input$pca_samples_to_remove)
+    updateSelectizeInput(session, "samples_to_remove_select", selected = input$pca_samples_to_remove)
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
+  
+  # Sync Boxplot removal to all other tabs
+  observeEvent(input$boxplot_samples_to_remove, {
+    removed_samples(input$boxplot_samples_to_remove)
+    updateSelectizeInput(session, "pca_samples_to_remove", selected = input$boxplot_samples_to_remove)
+    updateSelectizeInput(session, "sample_distance_samples_to_remove", selected = input$boxplot_samples_to_remove)
+    updateSelectizeInput(session, "samples_to_remove_select", selected = input$boxplot_samples_to_remove)
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
+  
+  # Sync Sample Distance removal to all other tabs
+  observeEvent(input$sample_distance_samples_to_remove, {
+    removed_samples(input$sample_distance_samples_to_remove)
+    updateSelectizeInput(session, "pca_samples_to_remove", selected = input$sample_distance_samples_to_remove)
+    updateSelectizeInput(session, "boxplot_samples_to_remove", selected = input$sample_distance_samples_to_remove)
+    updateSelectizeInput(session, "samples_to_remove_select", selected = input$sample_distance_samples_to_remove)
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
+  
+  # Sync Gene Expression Heatmap removal to all other tabs
+  observeEvent(input$samples_to_remove_select, {
+    removed_samples(input$samples_to_remove_select)
+    updateSelectizeInput(session, "pca_samples_to_remove", selected = input$samples_to_remove_select)
+    updateSelectizeInput(session, "boxplot_samples_to_remove", selected = input$samples_to_remove_select)
+    updateSelectizeInput(session, "sample_distance_samples_to_remove", selected = input$samples_to_remove_select)
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
+  
   # ---------------- PCA ----------------
   pca_res <- reactive({
     req(count_data(), sample_metadata())
-    run_pca(count_data(), sample_metadata(), scale_data = TRUE)
+    run_pca(count_data(), sample_metadata(), scale_data = TRUE, remove_samples = input$pca_samples_to_remove)
   })
   
   observeEvent(pca_res(), {
@@ -397,19 +477,19 @@ server <- function(input, output, session) {
   })
   
   expression_df <- reactive({
-    modify_df(count_data(), sample_metadata(), input$Log, input$QC_check, input$gene_var)
+    modify_df(count_data(), sample_metadata(), input$Log, input$QC_check, input$gene_var, remove_samples = input$boxplot_samples_to_remove)
   })
   
   expression_table_df <- reactive({
-    modify_table(count_data(), sample_metadata(), input$Log, input$QC_check, input$gene_var, input$fact_var)
+    modify_table(count_data(), sample_metadata(), input$Log, input$QC_check, input$gene_var, input$fact_var, remove_samples = input$boxplot_samples_to_remove)
   })
   
   pvalue_df <- reactive({
-    table_pvalue(count_data(), sample_metadata(), input$Log, input$QC_check, input$gene_var, input$fact_var)
+    table_pvalue(count_data(), sample_metadata(), input$Log, input$QC_check, input$gene_var, input$fact_var, remove_samples = input$boxplot_samples_to_remove)
   })
   
   panova_df <- reactive({
-    table_panova(count_data(), sample_metadata(), input$Log, input$QC_check, input$gene_var, input$fact_var)
+    table_panova(count_data(), sample_metadata(), input$Log, input$QC_check, input$gene_var, input$fact_var, remove_samples = input$boxplot_samples_to_remove)
   })
   
   observeEvent(input$run_button, {
