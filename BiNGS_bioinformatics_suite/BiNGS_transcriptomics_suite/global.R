@@ -1,6 +1,15 @@
 # ------------------ PCA ------------------
 # Run PCA
-run_pca <- function(counts, metadata, scale_data = TRUE) {
+run_pca <- function(counts, metadata, scale_data = TRUE, remove_samples = NULL) {
+  
+  # Remove specified samples
+  if (!is.null(remove_samples) && length(remove_samples) > 0) {
+    keep_cols <- setdiff(colnames(counts), c("gene_id", "gene_name", remove_samples))
+    gene_cols <- intersect(colnames(counts), c("gene_id", "gene_name"))
+    counts <- counts[, c(gene_cols, keep_cols), drop = FALSE]
+    metadata <- metadata[metadata$sample_id %in% keep_cols, ]
+  }
+  
   expr <- counts[, !(colnames(counts) %in% c("gene_id", "gene_name"))]
   expr_t <- t(expr)
   expr_t <- expr_t[, apply(expr_t, 2, var) > 0, drop = FALSE]
@@ -88,7 +97,14 @@ get_factor_comparisons = function(condition = c(),
   return(comparisons)
 }
 
-modify_df <- function(counts_df, metadata, log, QC_check, gene){
+modify_df <- function(counts_df, metadata, log, QC_check, gene, remove_samples = NULL){
+  #Remove specified samples
+  if (!is.null(remove_samples) && length(remove_samples) > 0) {
+    keep_samples <- setdiff(metadata$sample_id, remove_samples)
+    metadata <- metadata[metadata$sample_id %in% keep_samples, ]
+    keep_cols <- c(intersect(colnames(counts_df), c("gene_id", "gene_name")), keep_samples)
+    counts_df <- counts_df[, colnames(counts_df) %in% keep_cols, drop = FALSE]
+  }
   if(QC_check == "no"){
     if(log == "yes"){
       counts_table_logged = counts_df[,metadata$sample_id]
@@ -132,7 +148,14 @@ modify_df <- function(counts_df, metadata, log, QC_check, gene){
 }
 
 
-modify_table <- function(counts_df, metadata, log, QC_check, gene, fact_var){
+modify_table <- function(counts_df, metadata, log, QC_check, gene, fact_var, remove_samples = NULL){
+  # Remove specified samples
+  if (!is.null(remove_samples) && length(remove_samples) > 0) {
+    keep_samples <- setdiff(metadata$sample_id, remove_samples)
+    metadata <- metadata[metadata$sample_id %in% keep_samples, ]
+    keep_cols <- c(intersect(colnames(counts_df), c("gene_id", "gene_name")), keep_samples)
+    counts_df <- counts_df[, colnames(counts_df) %in% keep_cols, drop = FALSE]
+  }
   if(QC_check == "no"){
     if(log == "yes"){
       counts_table_logged = counts_df[,metadata$sample_id]
@@ -183,7 +206,14 @@ modify_table <- function(counts_df, metadata, log, QC_check, gene, fact_var){
 # metadata = read.csv("/Users/cwcoleman/Downloads/sample_metadata_rna_test.csv")
 # counts_df = read.csv("/Users/cwcoleman/Downloads/salmon_gene_counts_normalized_test.csv")
 # fact_var = "condition"
-table_pvalue = function(counts_df, metadata, log, QC_check, gene, fact_var){
+table_pvalue = function(counts_df, metadata, log, QC_check, gene, fact_var, remove_samples = NULL){
+  # Remove specified samples
+  if (!is.null(remove_samples) && length(remove_samples) > 0) {
+    keep_samples <- setdiff(metadata$sample_id, remove_samples)
+    metadata <- metadata[metadata$sample_id %in% keep_samples, ]
+    keep_cols <- c(intersect(colnames(counts_df), c("gene_id", "gene_name")), keep_samples)
+    counts_df <- counts_df[, colnames(counts_df) %in% keep_cols, drop = FALSE]
+  }
   dups = table(metadata[,fact_var])
   dups_df = as.data.frame(dups)
   save_s = c()
