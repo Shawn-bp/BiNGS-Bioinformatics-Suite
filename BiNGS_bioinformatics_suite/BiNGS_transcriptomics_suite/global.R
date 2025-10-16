@@ -1,5 +1,3 @@
-
-
 # ------------------ PCA ------------------
 # Run PCA
 run_pca <- function(counts, metadata, scale_data = TRUE) {
@@ -49,6 +47,7 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL,
       colors = RColorBrewer::brewer.pal(3, palette),
       type = "scatter",
       mode = "markers",
+      marker = list(size = 10),
       text = ~sample_id
     ) %>% plotly::layout(
       xaxis = list(title = x_label),
