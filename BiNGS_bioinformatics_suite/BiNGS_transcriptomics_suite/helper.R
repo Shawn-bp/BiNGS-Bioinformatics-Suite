@@ -1,3 +1,16 @@
+#------------------- PCA specific variables ------------------- 
+pca_color_palette_list = c(
+  "Set1 (Bright)" = "Set1",
+  "Dark2 (Muted)" = "Dark2",
+  "Set2 (Soft Pastel)" = "Set2",
+  "Set3 (Vibrant Pastel)" = "Set3",
+  "Paired (Contrasting)" = "Paired",
+  "Accent (Bold)" = "Accent"
+)
+
+pca_metadata_columns_to_remove = c("species", "strandedness", "alignment_bam", "fastq_1", "fastq_2", "fastq_1_trimmed", "fastq_2_trimmed", "bings_sample_id", "bings_case_id", "bings_patient_id","file_name", "bings_block_id")
+
+#------------------- General variables ------------------- 
 color_palette_list = c(
   "Dark2", 
   "Set1",
@@ -16,10 +29,11 @@ Log_list = c(
 )
 
 type_list = c(
-  "Plotly" = "plotly",
-  "GGplot" ="ggplot"
+  "Interactive" = "plotly",
+  "Static" ="ggplot"
 )
 
+#------------------- Boxplot specific variables -------------------
 box_plot_list = c(
   "Boxplot" = "Boxplot",
   "Boxplot with points" = "box_points",
@@ -40,7 +54,7 @@ gene = "ST7"
 fact_var = "condition"
 
 
-#Heatmap specific variables
+#------------------- Heatmap specific variables ------------------- 
 scaling_list = c("None" = "none", "Row" = "row", "Column" = "column", "Log scale" = "log")
 
 clustering_list = c("None" = "none", "Row" = "row", "Column" = "column", "Both" = "both")
@@ -51,7 +65,7 @@ show_names_list = c("None" = "none", "Row" = "row", "Column" = "column", "Both" 
 
 heatmap_type_list = c("Interactive" = "heatmaply", "Static" = "ggplot")
 
-# Gene expression heatmap specific color schemes for the heatmap itself
+# Gene expression heatmap specific color schemes for the heatmaps
 heatmap_color_scheme_list = c(
   "Red-Yellow-Blue" = "RdYlBu",
   "Red-Blue" = "RdBu",
