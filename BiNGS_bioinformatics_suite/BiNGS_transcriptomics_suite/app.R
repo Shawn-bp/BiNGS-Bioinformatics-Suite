@@ -1,3 +1,4 @@
+
 require(shiny)
 require(shinythemes)
 require(data.table)
@@ -55,7 +56,7 @@ ui <- fluidPage(
                                    choices = as.list(color_palette_list),
                                    selected = color_palette_list[[1]]),
                       radioButtons("PCA_Plot_type",
-                                   "Plotly or GGplot:",
+                                   "Interactive or Static:",
                                    choices = as.list(type_list),
                                    selected = type_list[[1]]),
                       actionButton("PCA_run_button", "Create PCA", 
@@ -296,7 +297,7 @@ ui <- fluidPage(
                       )
                )
              )
-      )
+    )
   )
 )
 server <- function(input, output, session) {
