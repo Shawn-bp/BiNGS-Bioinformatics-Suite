@@ -307,7 +307,14 @@ table_pvalue = function(counts_df, metadata, log, QC_check, gene, fact_var, remo
     }
   }}
 
-table_panova = function(counts_df, metadata, log, QC_check, gene, fact_var){
+table_panova = function(counts_df, metadata, log, QC_check, gene, fact_var, remove_samples = NULL){
+  # Remove specified samples
+  if (!is.null(remove_samples) && length(remove_samples) > 0) {
+    keep_samples <- setdiff(metadata$sample_id, remove_samples)
+    metadata <- metadata[metadata$sample_id %in% keep_samples, ]
+    keep_cols <- c(intersect(colnames(counts_df), c("gene_id", "gene_name")), keep_samples)
+    counts_df <- counts_df[, colnames(counts_df) %in% keep_cols, drop = FALSE]
+  }
   if(length(unique(metadata[,fact_var]))<=1){
     ptab = data.frame(Error = c("P-value requires more than 1 grouping factor!"))
   } else {
