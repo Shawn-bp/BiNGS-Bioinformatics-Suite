@@ -167,6 +167,17 @@ ui <- fluidPage(
              fluidRow(
                column(3,
                       selectizeInput(
+                        'sample_distance_samples_to_remove',
+                        label= "Select samples to remove:",
+                        choices= NULL,
+                        selected = NULL,
+                        options = list(
+                          `actions-box` = TRUE,
+                          placeholder= "Select samples to exclude"
+                        ),
+                        multiple = TRUE
+                      ),
+                      selectizeInput(
                         'samples_x_var',
                         label = "Select samples on X-axis:",
                         choices = NULL,
