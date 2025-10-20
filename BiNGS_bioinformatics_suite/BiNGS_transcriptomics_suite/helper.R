@@ -69,7 +69,7 @@ heatmap_type_list = c("Interactive" = "heatmaply", "Static" = "ggplot")
 
 # Gene expression heatmap specific color schemes for the heatmaps
 heatmap_color_scheme_list = c(
+  "Red-White-Blue" = "RdBu",
   "Red-Yellow-Blue" = "RdYlBu",
-  "Red-Blue" = "RdBu",
   "Spectral" = "Spectral"
 )
