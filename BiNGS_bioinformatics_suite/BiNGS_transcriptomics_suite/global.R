@@ -874,7 +874,6 @@ prepare_gene_expression_matrix <- function(counts,
 
 plot_gene_expression_heatmap <- function(expr_matrix,
                                          metadata = NULL,
-                                         heatmap_title = "Gene Expression Heatmap",
                                          color_by = NULL,
                                          sidebar_color_scheme = "Set1",
                                          heatmap_color_scheme = "RdYlBu",
