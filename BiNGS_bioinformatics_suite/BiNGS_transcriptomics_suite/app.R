@@ -20,6 +20,7 @@ ui <- fluidPage(
     
     # ------------------ UPLOAD TAB ------------------
     tabPanel("Upload",
+             br(),
              fileInput("counts_csv", "Select normalized counts file to import", accept = ".csv"),
              fileInput("metadata_csv", "Select metadata file to import", accept = ".csv")
     ),
@@ -28,6 +29,7 @@ ui <- fluidPage(
     tabPanel("PCA",
              fluidRow(
                column(3,
+                      br(),
                       selectizeInput(
                         'pca_samples_to_remove',
                         label = "Select samples to remove:",
@@ -79,6 +81,8 @@ ui <- fluidPage(
                ),
                # ------------------ PCA outputs ------------------
                column(9,
+                      br(),
+                      br(),
                       conditionalPanel("input.PCA_Plot_type == 'plotly'",
                                        plotlyOutput("pca_plotly", height = "600px")),
                       conditionalPanel("input.PCA_Plot_type == 'ggplot'",
@@ -90,6 +94,7 @@ ui <- fluidPage(
     tabPanel("Boxplot",
              fluidRow(
                column(3,
+                      br(),
                       selectizeInput(
                         'boxplot_samples_to_remove',
                         label = "Select samples to remove:",
@@ -148,7 +153,9 @@ ui <- fluidPage(
                       downloadButton("download_pval", "Download_pvalue_table.csv"),
                ),
                # ------------------ BOXPLOT OUTPUTS ------------------
-               column(9, 
+               column(9,
+                      br(),
+                      br(),
                       conditionalPanel(condition = "input.Boxplot_Plot_type == 'plotly'",
                                        plotlyOutput("boxplot_plotly")),
                       conditionalPanel(condition = "input.Boxplot_Plot_type == 'ggplot'",
@@ -166,6 +173,7 @@ ui <- fluidPage(
     tabPanel("Sample Distance Heatmap",
              fluidRow(
                column(3,
+                      br(),
                       selectizeInput(
                         'sample_distance_samples_to_remove',
                         label= "Select samples to remove:",
@@ -213,10 +221,15 @@ ui <- fluidPage(
                                    selected = heatmap_type_list[[1]]),
                       br(),
                       actionButton("sample_distance_run_button", "Create Heatmap", 
-                                   style="color: #fff; background-color: #337ab7; border-color: #2e6da4")
+                                   style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
+                      br(),
+                      br(),
+                      downloadButton("download_distance_matrix", "Download_distance_matrix.csv")
                ),
                # ------------------ HEATMAP OUTPUTS ------------------
                column(9,
+                      br(),
+                      br(),
                       conditionalPanel(
                         "input.Sample_Distance_Heatmap_Plot_type == 'ggplot'",
                         plotOutput("sample_distance_heatmap", height = "700px")
@@ -230,6 +243,7 @@ ui <- fluidPage(
     tabPanel("Gene Expression Heatmap",
              fluidRow(
                column(3,
+                      br(),
                       selectizeInput(
                         'samples_to_remove_select',
                         label = "Select samples to remove:",
@@ -300,6 +314,8 @@ ui <- fluidPage(
                       downloadButton("download_gene_heatmap_data", "Download_heatmap_data.csv")
                ),
                column(9,
+                      br(),
+                      br(),
                       conditionalPanel(
                         "input.gene_heatmap_plot_type == 'ggplot'",
                         plotOutput("gene_expression_heatmap_ggplot", height = "700px")
