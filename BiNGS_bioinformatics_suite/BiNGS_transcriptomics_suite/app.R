@@ -178,20 +178,6 @@ ui <- fluidPage(
                         multiple = TRUE
                       ),
                       selectizeInput(
-                        'samples_x_var',
-                        label = "Select samples on X-axis:",
-                        choices = NULL,
-                        options = list(`actions-box` = TRUE),
-                        multiple = TRUE
-                      ),
-                      selectizeInput(
-                        'samples_y_var',
-                        label = "Select samples on Y-axis:",
-                        choices = NULL,
-                        options = list(`actions-box` = TRUE),
-                        multiple = TRUE
-                      ),
-                      selectizeInput(
                         'metadata_color_bars',
                         label = "Select metadata field to color by:",
                         choices = NULL,
@@ -536,8 +522,11 @@ server <- function(input, output, session) {
     # sample names (exclude gene_id / gene_name columns if present)
     sample_choices <- colnames(count_data())
     sample_choices <- sample_choices[!sample_choices %in% c("gene_id", "gene_name")]
-    updateSelectizeInput(session, "samples_x_var", choices = sample_choices, selected = sample_choices, server = TRUE)
-    updateSelectizeInput(session, "samples_y_var", choices = sample_choices, selected = sample_choices, server = TRUE)
+    updateSelectizeInput(session, "sample_distance_samples_to_remove",
+                         label = "Select samples to remove:",
+                         choices = sample_choices,
+                         selected = NULL,
+                         server = TRUE)
   })
   
   observeEvent(sample_metadata(), {
@@ -557,11 +546,13 @@ server <- function(input, output, session) {
   dist_matrix_reactive <- eventReactive(input$sample_distance_run_button, {
     req(count_data(), sample_metadata())
     
-    # produce full dist matrix (will be subset for plotting below if needed)
+    samples_remove <- input$sample_distance_samples_to_remove
+    
+    # produce full dist matrix 
     run_sample_distance(
       counts = count_data(),
       metadata = sample_metadata(),
-      remove_samples = NULL,
+      remove_samples = samples_remove,
       scale_type = input$sample_distance_heatmap_scaling_type
     )
   })
@@ -570,15 +561,9 @@ server <- function(input, output, session) {
   output$sample_distance_heatmap <- renderPlot({
     req(dist_matrix_reactive())
     dist_mat <- dist_matrix_reactive()
-    sel_x <- input$samples_x_var
-    sel_y <- input$samples_y_var
-    
-    keep_cols_x <- if (!is.null(sel_x) && length(sel_x) > 0) intersect(colnames(dist_mat), sel_x) else colnames(dist_mat)
-    keep_cols_y <- if (!is.null(sel_y) && length(sel_y) > 0) intersect(rownames(dist_mat), sel_y) else rownames(dist_mat)
-    sub_mat <- dist_mat[keep_cols_y, keep_cols_x, drop = FALSE]
     
     p <- plot_sample_distance_heatmap(
-      dist_matrix = sub_mat,
+      dist_matrix = dist_matrix_reactive(),
       metadata = sample_metadata(),
       color_scheme = input$sample_distance_heatmap_color_palette,
       cluster = input$sample_distance_heatmap_clustering_type,
@@ -595,15 +580,9 @@ server <- function(input, output, session) {
   output$sample_distance_heatmaply <- renderPlotly({
     req(dist_matrix_reactive())
     dist_mat <- dist_matrix_reactive()
-    sel_x <- input$samples_x_var
-    sel_y <- input$samples_y_var
-    
-    keep_cols_x <- if (!is.null(sel_x) && length(sel_x) > 0) intersect(colnames(dist_mat), sel_x) else colnames(dist_mat)
-    keep_cols_y <- if (!is.null(sel_y) && length(sel_y) > 0) intersect(rownames(dist_mat), sel_y) else rownames(dist_mat)
-    sub_mat <- dist_mat[keep_cols_y, keep_cols_x, drop = FALSE]
     
     hm <- plot_sample_distance_heatmap(
-      dist_matrix = sub_mat,
+      dist_matrix = dist_matrix_reactive(),
       metadata = sample_metadata(),
       color_scheme = input$sample_distance_heatmap_color_palette,
       cluster = input$sample_distance_heatmap_clustering_type,
