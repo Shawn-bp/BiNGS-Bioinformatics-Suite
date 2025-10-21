@@ -327,6 +327,16 @@ ui <- fluidPage(
                )
              )
     )
+  ),
+  tags$div(
+    style = "background-color: rgba(128, 128, 128, 0.3); 
+             color: #666; 
+             text-align: center; 
+             padding: 10px; 
+             margin-top: 20px;
+             font-size: 12px;
+             border-radius: 5px;",
+    "Version 1.0 | Developed by Shawn Fridlyand"
   )
 )
 server <- function(input, output, session) {
