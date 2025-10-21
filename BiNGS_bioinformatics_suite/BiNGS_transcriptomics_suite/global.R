@@ -751,7 +751,7 @@ plot_sample_distance_heatmap <- function(dist_matrix,
     p <- ggplot(dist_melt, aes(x = Sample1, y = Sample2, fill = Distance)) +
       geom_tile() +
       scale_fill_distiller(palette = color_scheme, direction = 1) +
-      labs(title = "Sample Distance Heatmap", x = "", y = "") +
+      labs(title = "", x = "", y = "") +
       theme_minimal() +
       theme(
         panel.grid = element_blank(),
@@ -822,7 +822,6 @@ plot_sample_distance_heatmap <- function(dist_matrix,
       Colv = show_colv,
       labRow = labRow,
       labCol = labCol,
-      main = "Sample Distance Heatmap",
       row_side_colors = side_colors,
       col_side_colors = side_colors,
       showticklabels = c(!is.null(labRow), !is.null(labCol)) # ensures axes update dynamically
@@ -876,6 +875,7 @@ plot_gene_expression_heatmap <- function(expr_matrix,
                                          metadata = NULL,
                                          color_by = NULL,
                                          sidebar_color_scheme = "Set1",
+                                         heatmap_title = "Gene Expression Heatmap",
                                          heatmap_color_scheme = "RdYlBu",
                                          scaling = "none",
                                          cluster = "both",
