@@ -1,4 +1,3 @@
-
 require(shiny)
 require(shinythemes)
 require(data.table)
@@ -20,9 +19,23 @@ ui <- fluidPage(
     
     # ------------------ UPLOAD TAB ------------------
     tabPanel("Upload",
-             br(),
-             fileInput("counts_csv", "Select normalized counts file to import", accept = ".csv"),
-             fileInput("metadata_csv", "Select metadata file to import", accept = ".csv")
+             fluidRow(
+               column(6,
+                      br(),
+                      fileInput("counts_csv", "Select normalized counts file to import", accept = ".csv"),
+                      fileInput("metadata_csv", "Select metadata file to import", accept = ".csv")
+               ),
+               column(6,
+                      div(
+                        style = "text-align: center; 
+                             padding: 60px 40px; 
+                             background-color: #337ab7; 
+                             border-radius: 5px;
+                             margin: 20px;",
+                        img(src = "bings_logo_white.png", height = "80px")
+                      )
+               )
+             )
     ),
     
     # ------------------ PCA TAB ------------------
