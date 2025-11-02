@@ -1,4 +1,3 @@
-
 # ------------------ PCA ------------------
 # Run PCA
 run_pca <- function(counts, metadata, scale_data = TRUE, remove_samples = NULL) {
@@ -42,10 +41,22 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL,
   
   if (plot_type == "ggplot") {
     p <- ggplot(pca_coords, aes_string(x = x_pc, y = y_pc, color = color_var)) +
-      geom_point(size = 4) +
-      scale_color_brewer(palette = palette) +
-      labs(x = x_label, y = y_label) +
-      theme_minimal()
+      geom_point(size = 4, alpha = 0.8) +
+      scale_color_brewer(palette = palette, name = color_var) +
+      labs(
+        title = "Principal Component Analysis",
+        x = x_label, 
+        y = y_label
+      ) +
+      theme_minimal() +
+      theme(
+        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10),
+        legend.position = "right",
+        legend.background = element_rect(fill = "white", color = "gray80"),
+        legend.key = element_rect(fill = "white")
+      )
     return(p)
     
   } else if (plot_type == "plotly") {
@@ -54,15 +65,45 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL,
       x = ~get(x_pc),
       y = ~get(y_pc),
       color = if (!is.null(color_var)) pca_coords[[color_var]] else NULL,
-      colors = RColorBrewer::brewer.pal(3, palette),
+      colors = RColorBrewer::brewer.pal(max(3, length(unique(pca_coords[[color_var]]))), palette),
       type = "scatter",
       mode = "markers",
       marker = list(size = 10),
-      text = ~sample_id
+      text = ~sample_id,
+      hovertemplate = paste0(
+        "<b>%{text}</b><br>",
+        x_pc, ": %{x:.2f}<br>",
+        y_pc, ": %{y:.2f}<br>",
+        "<extra></extra>"
+      )
     ) %>% plotly::layout(
-      xaxis = list(title = x_label),
-      yaxis = list(title = y_label)
-    )
+      title = list(text = "Principal Component Analysis", x = 0.5, xanchor = "center"),
+      xaxis = list(
+        title = x_label,
+        zerolinecolor = '#969696',
+        zerolinewidth = 2,
+        linecolor = '#636363',
+        linewidth = 2,
+        gridcolor = '#e0e0e0'
+      ),
+      yaxis = list(
+        title = y_label,
+        zerolinecolor = '#969696',
+        zerolinewidth = 2,
+        linecolor = '#636363',
+        linewidth = 2,
+        gridcolor = '#e0e0e0'
+      ),
+      legend = list(
+        title = list(text = paste0('<b>', color_var, '</b>')),
+        x = 1.02,
+        y = 1,
+        xanchor = "left",
+        bgcolor = 'rgba(255,255,255,0.9)',
+        bordercolor = '#636363',
+        borderwidth = 1
+      )
+    ) %>% configure_plotly_panel(exportFormat = "svg")
     return(p)
   }
 }
@@ -112,7 +153,6 @@ modify_df <- function(counts_df, metadata, log, QC_check, gene, remove_samples =
       transposed_counts = as.data.frame(t(counts_table_logged))
       colnames(transposed_counts) = counts_df$gene_name
       combination_df = cbind(metadata, transposed_counts)
-      # combination_df = subset(combination_df, select = -c(species, strandedness, alignment_bam, fastq_1, fastq_2, fastq_1_trimmed, fastq_2_trimmed))
       combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
       combination_df[gene] = log2(combination_df[gene]+1)
     }
@@ -121,7 +161,6 @@ modify_df <- function(counts_df, metadata, log, QC_check, gene, remove_samples =
       transposed_counts = as.data.frame(t(counts_table_logged))
       colnames(transposed_counts) = counts_df$gene_name
       combination_df = cbind(metadata, transposed_counts)
-      # combination_df = subset(combination_df, select = -c(species, strandedness, alignment_bam, fastq_1, fastq_2, fastq_1_trimmed, fastq_2_trimmed))
       combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
     }}
   if(QC_check == "yes"){
@@ -130,7 +169,6 @@ modify_df <- function(counts_df, metadata, log, QC_check, gene, remove_samples =
       transposed_counts = as.data.frame(t(counts_table_logged))
       colnames(transposed_counts) = counts_df$gene_name
       combination_df = cbind(metadata, transposed_counts)
-      # combination_df = subset(combination_df, select = -c(species, strandedness, alignment_bam, fastq_1, fastq_2, fastq_1_trimmed, fastq_2_trimmed))
       combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
       combination_df[gene] = log2(combination_df[gene]+1)
       combination_df = filter(combination_df, quality_check == "pass")
@@ -140,10 +178,8 @@ modify_df <- function(counts_df, metadata, log, QC_check, gene, remove_samples =
       transposed_counts = as.data.frame(t(counts_table_logged))
       colnames(transposed_counts) = counts_df$gene_name
       combination_df = cbind(metadata, transposed_counts)
-      # combination_df = subset(combination_df, select = -c(species, strandedness, alignment_bam, fastq_1, fastq_2, fastq_1_trimmed, fastq_2_trimmed))
       combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
       combination_df = filter(combination_df, quality_check == "pass")
-      #return(combination_df)
     }}
   return(combination_df)
 }
@@ -168,7 +204,6 @@ modify_table <- function(counts_df, metadata, log, QC_check, gene, fact_var, rem
       combination_df
       combination_df[gene] = log2(combination_df[gene]+1)
       rownames(combination_df) = NULL
-      #return(combination_df)
     }
     if(log == "no"){
       counts_table_logged = counts_df[,metadata$sample_id]
@@ -190,7 +225,6 @@ modify_table <- function(counts_df, metadata, log, QC_check, gene, fact_var, rem
       combination_df[gene] = log2(combination_df[gene]+1)
       combination_df = filter(combination_df, quality_check == "pass")
       rownames(combination_df) = NULL
-      #return(combination_df)
     } 
     if(log == "no"){
       counts_table_logged = counts_df[,metadata$sample_id]
@@ -204,9 +238,7 @@ modify_table <- function(counts_df, metadata, log, QC_check, gene, fact_var, rem
     }}
   return(combination_df)
 }
-# metadata = read.csv("/Users/cwcoleman/Downloads/sample_metadata_rna_test.csv")
-# counts_df = read.csv("/Users/cwcoleman/Downloads/salmon_gene_counts_normalized_test.csv")
-# fact_var = "condition"
+
 table_pvalue = function(counts_df, metadata, log, QC_check, gene, fact_var, remove_samples = NULL){
   # Remove specified samples
   if (!is.null(remove_samples) && length(remove_samples) > 0) {
@@ -252,7 +284,6 @@ table_pvalue = function(counts_df, metadata, log, QC_check, gene, fact_var, remo
         transposed_counts = as.data.frame(t(counts_table_logged))
         colnames(transposed_counts) = counts_df$gene_name
         combination_df = cbind(metadata, transposed_counts)
-        # combination_df = subset(combination_df, select = -c(species, strandedness, alignment_bam, fastq_1, fastq_2, fastq_1_trimmed, fastq_2_trimmed))
         combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
         combination_df = combination_df[,unique(c(gene, fact_var, "sample_id", "condition", "replicate","quality_check"))]
         colnames(combination_df)[1] = "x"
@@ -269,7 +300,6 @@ table_pvalue = function(counts_df, metadata, log, QC_check, gene, fact_var, remo
         transposed_counts = as.data.frame(t(counts_table_logged))
         colnames(transposed_counts) = counts_df$gene_name
         combination_df = cbind(metadata, transposed_counts)
-        # combination_df = subset(combination_df, select = -c(species, strandedness, alignment_bam, fastq_1, fastq_2, fastq_1_trimmed, fastq_2_trimmed))
         combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
         combination_df[gene] = log2(combination_df[gene]+1)
         combination_df = combination_df[,unique(c(gene, fact_var, "sample_id", "condition", "replicate","quality_check"))]
@@ -368,7 +398,6 @@ table_panova = function(counts_df, metadata, log, QC_check, gene, fact_var, remo
         transposed_counts = as.data.frame(t(counts_table_logged))
         colnames(transposed_counts) = counts_df$gene_name
         combination_df = cbind(metadata, transposed_counts)
-        # combination_df = subset(combination_df, select = -c(species, strandedness, alignment_bam, fastq_1, fastq_2, fastq_1_trimmed, fastq_2_trimmed))
         combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
         combination_df = combination_df[,unique(c(gene, fact_var, "sample_id", "condition", "replicate","quality_check"))]
         combination_df = filter(combination_df, quality_check == "pass")
@@ -380,13 +409,6 @@ table_panova = function(counts_df, metadata, log, QC_check, gene, fact_var, remo
       }}
     return(panova_df)
   }}
-
-
-# Variables to color the PCA plots and sample similarity side color bars by
-# Allowed values are named character vectors where the names are sample metadata 
-# column names and the values are formatted versions that will be used for report 
-# tab names and legend titles
-
 
 configure_plotly_panel = function(
     plotly_panel, 
@@ -405,304 +427,417 @@ configure_plotly_panel = function(
   plotly_panel = plotly_panel %>%
     plotly::config(
       toImageButtonOptions = list(
-        # Figure export format (interactive)
         format = exportFormat
       ),
       edits = list(
-        # Determines if the main anchor of the annotation is editable. 
-        # The main anchor corresponds to the text (if no arrow) or the 
-        # arrow (which drags the whole thing leaving the arrow length & 
-        # direction unchanged
         annotationPosition = annotationPosition,
-        # Has only an effect for annotations with arrows.
-        # Enables changing the length and direction of the arrow.
         annotationTail = annotationTail, 
-        # Enables editing annotation text.
         annotationText = annotationText,
-        # Enables editing axis title text.
         axisTitleText = axisTitleText,
-        # Enables moving colorbars.
         colorbarPosition = colorbarPosition,
-        # Enables editing colorbar title text.
         colorbarTitleText = colorbarTitleText,
-        # Enables moving the legend.
         legendPosition = legendPosition,
-        # Enables editing the trace name fields from the legend
         legendText = legendText,
-        # Enables moving shapes.
         shapePosition = shapePosition,
-        # Enables editing the global layout title.
         titleText = titleText
       )
     ) 
   return(plotly_panel)
 }
 
-# table = read.csv("/Users/cwcoleman/Downloads/TSPAN6_expression.csv")
-# colnames(table)[5] = "SOX2-OT"
-#gene = "SOX2-OT"
-# factor = "condition"
-# plot_type = "plotly"
-# box_type = "Boxplot"
-#add log2 button back to input of function
 draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot_type){
   nb.cols <- length(unique(table[,factor]))
   my_colors <- colorRampPalette(brewer.pal(8, color_palette))(nb.cols)
+  
   if(plot_type == "plotly"){
     if(grepl("-", gene) == TRUE){
-      gene2 =sub('-','_',gene)
-      generow = which(colnames(table) == gene)
-      colnames(table)[generow] = gene2
-      gene2 = as.symbol(gene2)
-    }else{
-      gene2 = gene
+      gene2 <- sub('-','_',gene)
+      generow <- which(colnames(table) == gene)
+      colnames(table)[generow] <- gene2
+      gene2 <- as.symbol(gene2)
+    } else {
+      gene2 <- gene
     }
     if(factor == "replicate"){
-      table$replicate = as.character(table$replicate)
+      table$replicate <- as.character(table$replicate)
     }
+    
     if(box_type == "Boxplot"){
-      plotly::plot_ly(table,
-                      type = "box",
-                      x = as.formula(paste0("~", factor)),
-                      y = as.formula(paste0("~", gene2)),
-                      color = as.formula(paste0("~", factor)),
-                      colors = color_palette
+      plotly::plot_ly(
+        table,
+        type = "box",
+        x = as.formula(paste0("~", factor)),
+        y = as.formula(paste0("~", gene2)),
+        color = as.formula(paste0("~", factor)),
+        colors = my_colors
       ) %>%
         layout(
-          title = sprintf("%s Gene Expression", gene),
-          xaxis = list(title = "Sample Groups",
-                       zerolinecolor = '#969696',
-                       zerolinewidth = 2,
-                       linecolor = '#636363',
-                       linewidth = 2),
-          yaxis = list(title = paste0(ifelse(log == "yes", "Log", ""), " Normalized Gene Expression"),
-                       type = ifelse("expression", "log", "-"),
-                       zerolinecolor = '#969696',
-                       zerolinewidth = 2,
-                       linecolor = '#636363',
-                       linewidth = 2),
-          legend = list(title=list(text='<b> Sample Groups </b>'))
+          title = list(text = sprintf("<b>%s Gene Expression</b>", gene), x = 0.5, xanchor = "center"),
+          xaxis = list(
+            title = list(text = "<b>Sample Groups</b>"),
+            zerolinecolor = '#969696',
+            zerolinewidth = 2,
+            linecolor = '#636363',
+            linewidth = 2,
+            gridcolor = '#e0e0e0'
+          ),
+          yaxis = list(
+            title = list(text = paste0("<b>", ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression</b>")),
+            zerolinecolor = '#969696',
+            zerolinewidth = 2,
+            linecolor = '#636363',
+            linewidth = 2,
+            gridcolor = '#e0e0e0'
+          ),
+          legend = list(
+            title = list(text = paste0('<b>', factor, '</b>')),
+            x = 1.02,
+            y = 1,
+            xanchor = "left",
+            bgcolor = 'rgba(255,255,255,0.9)',
+            bordercolor = '#636363',
+            borderwidth = 1
+          )
         ) %>% configure_plotly_panel(exportFormat = "svg")
+      
     } else if(box_type == "box_points"){
-      plotly::plot_ly(table,
-                      type = "box",
-                      boxpoints = 'all',
-                      pointpos = 0,
-                      x = as.formula(paste0("~", factor)),
-                      y = as.formula(paste0("~", gene2)),
-                      color = as.formula(paste0("~", factor)),
-                      colors = color_palette
+      plotly::plot_ly(
+        table,
+        type = "box",
+        boxpoints = 'all',
+        pointpos = 0,
+        x = as.formula(paste0("~", factor)),
+        y = as.formula(paste0("~", gene2)),
+        color = as.formula(paste0("~", factor)),
+        colors = my_colors
       ) %>%
         layout(
-          title = sprintf("%s Gene Expression", gene),
-          xaxis = list(title = "Sample Groups",
-                       zerolinecolor = '#969696',
-                       zerolinewidth = 2,
-                       linecolor = '#636363',
-                       linewidth = 2),
-          yaxis = list(title = paste0(ifelse(log == "yes", "Log", ""), " Normalized Gene Expression"),
-                       type = ifelse("expression", "log", "-"),
-                       zerolinecolor = '#969696',
-                       zerolinewidth = 2,
-                       linecolor = '#636363',
-                       linewidth = 2),
-          legend = list(title=list(text='<b> Sample Groups </b>'))
+          title = list(text = sprintf("<b>%s Gene Expression</b>", gene), x = 0.5, xanchor = "center"),
+          xaxis = list(
+            title = list(text = "<b>Sample Groups</b>"),
+            zerolinecolor = '#969696',
+            zerolinewidth = 2,
+            linecolor = '#636363',
+            linewidth = 2,
+            gridcolor = '#e0e0e0'
+          ),
+          yaxis = list(
+            title = list(text = paste0("<b>", ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression</b>")),
+            zerolinecolor = '#969696',
+            zerolinewidth = 2,
+            linecolor = '#636363',
+            linewidth = 2,
+            gridcolor = '#e0e0e0'
+          ),
+          legend = list(
+            title = list(text = paste0('<b>', factor, '</b>')),
+            x = 1.02,
+            y = 1,
+            xanchor = "left",
+            bgcolor = 'rgba(255,255,255,0.9)',
+            bordercolor = '#636363',
+            borderwidth = 1
+          )
         ) %>% configure_plotly_panel(exportFormat = "svg")
+      
     } else if(box_type == "Violin plot"){
-      plotly::plot_ly(table,
-                      type = "violin",
-                      box = list(
-                        visible = TRUE
-                      ),
-                      meanline = list(
-                        visible = TRUE
-                      ),
-                      x = as.formula(paste0("~", factor)),
-                      y = as.formula(paste0("~", gene2)),
-                      color = as.formula(paste0("~", factor)),
-                      colors = color_palette
+      plotly::plot_ly(
+        table,
+        type = "violin",
+        box = list(visible = TRUE),
+        meanline = list(visible = TRUE),
+        x = as.formula(paste0("~", factor)),
+        y = as.formula(paste0("~", gene2)),
+        color = as.formula(paste0("~", factor)),
+        colors = my_colors
       ) %>%
         layout(
-          title = sprintf("%s Gene Expression", gene),
-          xaxis = list(title = "Sample Groups",
-                       zerolinecolor = '#969696',
-                       zerolinewidth = 2,
-                       linecolor = '#636363',
-                       linewidth = 2),
-          yaxis = list(title = paste0(ifelse(log == "yes", "Log", ""), " Normalized Gene Expression"),
-                       type = ifelse("expression", "log", "-"),
-                       zerolinecolor = '#969696',
-                       zerolinewidth = 2,
-                       linecolor = '#636363',
-                       linewidth = 2),
-          legend = list(title=list(text='<b> Sample Groups </b>'))
+          title = list(text = sprintf("<b>%s Gene Expression</b>", gene), x = 0.5, xanchor = "center"),
+          xaxis = list(
+            title = list(text = "<b>Sample Groups</b>"),
+            zerolinecolor = '#969696',
+            zerolinewidth = 2,
+            linecolor = '#636363',
+            linewidth = 2,
+            gridcolor = '#e0e0e0'
+          ),
+          yaxis = list(
+            title = list(text = paste0("<b>", ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression</b>")),
+            zerolinecolor = '#969696',
+            zerolinewidth = 2,
+            linecolor = '#636363',
+            linewidth = 2,
+            gridcolor = '#e0e0e0'
+          ),
+          legend = list(
+            title = list(text = paste0('<b>', factor, '</b>')),
+            x = 1.02,
+            y = 1,
+            xanchor = "left",
+            bgcolor = 'rgba(255,255,255,0.9)',
+            bordercolor = '#636363',
+            borderwidth = 1
+          )
         ) %>% configure_plotly_panel(exportFormat = "svg")
+      
     } else if(box_type == "violin_points"){
-      plotly::plot_ly(table,
-                      type = "violin",
-                      points = 'all',
-                      pointpos = 0,
-                      box = list(
-                        visible = TRUE
-                      ),
-                      meanline = list(
-                        visible = TRUE
-                      ),
-                      x = as.formula(paste0("~", factor)),
-                      y = as.formula(paste0("~", gene2)),
-                      color = as.formula(paste0("~", factor)),
-                      colors = color_palette
+      plotly::plot_ly(
+        table,
+        type = "violin",
+        points = 'all',
+        pointpos = 0,
+        box = list(visible = TRUE),
+        meanline = list(visible = TRUE),
+        x = as.formula(paste0("~", factor)),
+        y = as.formula(paste0("~", gene2)),
+        color = as.formula(paste0("~", factor)),
+        colors = my_colors
       ) %>%
         layout(
-          title = sprintf("%s Gene Expression", gene),
-          xaxis = list(title = "Sample Groups",
-                       zerolinecolor = '#969696',
-                       zerolinewidth = 2,
-                       linecolor = '#636363',
-                       linewidth = 2),
-          yaxis = list(title = paste0(ifelse(log == "yes", "Log", ""), " Normalized Gene Expression"),
-                       type = ifelse("expression", "log", "-"),
-                       zerolinecolor = '#969696',
-                       zerolinewidth = 2,
-                       linecolor = '#636363',
-                       linewidth = 2),
-          legend = list(title=list(text='<b> Sample Groups </b>'))
+          title = list(text = sprintf("<b>%s Gene Expression</b>", gene), x = 0.5, xanchor = "center"),
+          xaxis = list(
+            title = list(text = "<b>Sample Groups</b>"),
+            zerolinecolor = '#969696',
+            zerolinewidth = 2,
+            linecolor = '#636363',
+            linewidth = 2,
+            gridcolor = '#e0e0e0'
+          ),
+          yaxis = list(
+            title = list(text = paste0("<b>", ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression</b>")),
+            zerolinecolor = '#969696',
+            zerolinewidth = 2,
+            linecolor = '#636363',
+            linewidth = 2,
+            gridcolor = '#e0e0e0'
+          ),
+          legend = list(
+            title = list(text = paste0('<b>', factor, '</b>')),
+            x = 1.02,
+            y = 1,
+            xanchor = "left",
+            bgcolor = 'rgba(255,255,255,0.9)',
+            bordercolor = '#636363',
+            borderwidth = 1
+          )
         ) %>% configure_plotly_panel(exportFormat = "svg")
     }
-  }else if(plot_type == "ggplot"){
+    
+  } else if(plot_type == "ggplot"){
     if(factor == "replicate"){
-      table$replicate = as.character(table$replicate)
+      table$replicate <- as.character(table$replicate)
     }
+    
     if(length(unique(table[,factor])) <= 4){
-      comparisons = get_factor_comparisons(condition = table[,factor])
-      my_comparisons = list()
+      comparisons <- get_factor_comparisons(condition = table[,factor])
+      my_comparisons <- list()
       for(i in 1:nrow(comparisons)){
-        v = c(comparisons[i,2], comparisons[i,3])
-        my_comparisons[[length(my_comparisons)+1]] = v
+        v <- c(comparisons[i,2], comparisons[i,3])
+        my_comparisons[[length(my_comparisons)+1]] <- v
       }
+      
       if (box_type == "Boxplot"){
-        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor))+
-          geom_boxplot(notch=FALSE, alpha = 0.2, outlier.shape = NA) +
-          ylab(paste0(ifelse(log == "yes", "Log", ""), " Normalized Gene Expression")) + 
+        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
+          geom_boxplot(notch = FALSE, alpha = 0.2, outlier.shape = NA) +
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression")) + 
+          xlab("Sample Groups") +
           ggtitle(paste(gene, "Gene Expression")) +
-          scale_color_manual(values=  my_colors) + 
+          scale_color_manual(values = my_colors, name = factor) + 
+          scale_fill_manual(values = my_colors, name = factor) + 
           stat_compare_means(comparisons = my_comparisons, method = "t.test", paired = FALSE) +
-          scale_fill_manual(values=  my_colors ) + 
           theme_classic() + 
-          theme(plot.title = element_text(hjust = 0.5)) + 
-          NULL
-      }else if(box_type == "box_points"){
-        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor))+
-          geom_boxplot(notch=FALSE, alpha = 0.2, outlier.shape = NA) +
-          geom_jitter()+
-          ylab(paste0(ifelse(log == "yes", "Log", ""), " Normalized Gene Expression")) + 
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+            axis.title.x = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 12, face = "bold"),
+            legend.title = element_text(size = 11, face = "bold"),
+            legend.text = element_text(size = 10),
+            legend.position = "right",
+            legend.background = element_rect(fill = "white", color = "gray80"),
+            legend.key = element_rect(fill = "white")
+          )
+        
+      } else if(box_type == "box_points"){
+        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
+          geom_boxplot(notch = FALSE, alpha = 0.2, outlier.shape = NA) +
+          geom_jitter(size = 2, alpha = 0.6, width = 0.2) +
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression")) + 
+          xlab("Sample Groups") +
           ggtitle(paste(gene, "Gene Expression")) +
-          scale_color_manual(values=  my_colors) + 
+          scale_color_manual(values = my_colors, name = factor) + 
+          scale_fill_manual(values = my_colors, name = factor) + 
           stat_compare_means(comparisons = my_comparisons, method = "t.test", paired = FALSE) +
-          scale_fill_manual(values=  my_colors ) + 
           theme_classic() + 
-          theme(plot.title = element_text(hjust = 0.5)) + 
-          NULL
-      }else if(box_type == "Violin plot"){
-        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor))+
-          geom_violin(notch=FALSE, alpha = 0.2, outlier.shape = NA)+
-          ylab(paste0(ifelse(log == "yes", "Log", ""), " Normalized Gene Expression")) + 
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+            axis.title.x = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 12, face = "bold"),
+            legend.title = element_text(size = 11, face = "bold"),
+            legend.text = element_text(size = 10),
+            legend.position = "right",
+            legend.background = element_rect(fill = "white", color = "gray80"),
+            legend.key = element_rect(fill = "white")
+          )
+        
+      } else if(box_type == "Violin plot"){
+        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
+          geom_violin(alpha = 0.2) +
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression")) + 
+          xlab("Sample Groups") +
           ggtitle(paste(gene, "Gene Expression")) +
-          scale_color_manual(values=  my_colors) + 
+          scale_color_manual(values = my_colors, name = factor) + 
+          scale_fill_manual(values = my_colors, name = factor) + 
           stat_compare_means(comparisons = my_comparisons, method = "t.test", paired = FALSE) +
-          scale_fill_manual(values=  my_colors ) + 
           theme_classic() + 
-          theme(plot.title = element_text(hjust = 0.5)) + 
-          NULL
-      }else if(box_type == "violin_points"){
-        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor))+
-          geom_violin(notch=FALSE, alpha = 0.2, outlier.shape = NA) +
-          geom_jitter()+
-          ylab(paste0(ifelse(log == "yes", "Log", ""), " Normalized Gene Expression")) + 
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+            axis.title.x = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 12, face = "bold"),
+            legend.title = element_text(size = 11, face = "bold"),
+            legend.text = element_text(size = 10),
+            legend.position = "right",
+            legend.background = element_rect(fill = "white", color = "gray80"),
+            legend.key = element_rect(fill = "white")
+          )
+        
+      } else if(box_type == "violin_points"){
+        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
+          geom_violin(alpha = 0.2) +
+          geom_jitter(size = 2, alpha = 0.6, width = 0.2) +
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression")) + 
+          xlab("Sample Groups") +
           ggtitle(paste(gene, "Gene Expression")) +
-          scale_color_manual(values=  my_colors) + 
+          scale_color_manual(values = my_colors, name = factor) + 
+          scale_fill_manual(values = my_colors, name = factor) + 
           stat_compare_means(comparisons = my_comparisons, method = "t.test", paired = FALSE) +
-          scale_fill_manual(values=  my_colors ) + 
           theme_classic() + 
-          theme(plot.title = element_text(hjust = 0.5)) + 
-          NULL
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+            axis.title.x = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 12, face = "bold"),
+            legend.title = element_text(size = 11, face = "bold"),
+            legend.text = element_text(size = 10),
+            legend.position = "right",
+            legend.background = element_rect(fill = "white", color = "gray80"),
+            legend.key = element_rect(fill = "white")
+          )
       } 
+      
     } else {
       if (box_type == "Boxplot"){
-        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor))+
-          geom_boxplot(notch=FALSE, alpha = 0.2, outlier.shape = NA) +
-          ylab(paste0(ifelse(log == "yes", "Log", ""), " Normalized Gene Expression")) + 
+        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
+          geom_boxplot(notch = FALSE, alpha = 0.2, outlier.shape = NA) +
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression")) + 
+          xlab("Sample Groups") +
           ggtitle(paste(gene, "Gene Expression")) +
-          scale_color_manual(values=  my_colors) + 
-          scale_fill_manual(values=  my_colors ) + 
+          scale_color_manual(values = my_colors, name = factor) + 
+          scale_fill_manual(values = my_colors, name = factor) + 
           theme_classic() + 
-          theme(plot.title = element_text(hjust = 0.5)) + 
-          NULL
-      }else if(box_type == "box_points"){
-        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor))+
-          geom_boxplot(notch=FALSE, alpha = 0.2, outlier.shape = NA) +
-          geom_jitter()+
-          ylab(paste0(ifelse(log == "yes", "Log", ""), " Normalized Gene Expression")) + 
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+            axis.title.x = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 12, face = "bold"),
+            legend.title = element_text(size = 11, face = "bold"),
+            legend.text = element_text(size = 10),
+            legend.position = "right",
+            legend.background = element_rect(fill = "white", color = "gray80"),
+            legend.key = element_rect(fill = "white")
+          )
+        
+      } else if(box_type == "box_points"){
+        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
+          geom_boxplot(notch = FALSE, alpha = 0.2, outlier.shape = NA) +
+          geom_jitter(size = 2, alpha = 0.6, width = 0.2) +
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression")) + 
+          xlab("Sample Groups") +
           ggtitle(paste(gene, "Gene Expression")) +
-          scale_color_manual(values=  my_colors) + 
-          scale_fill_manual(values=  my_colors ) + 
+          scale_color_manual(values = my_colors, name = factor) + 
+          scale_fill_manual(values = my_colors, name = factor) + 
           theme_classic() + 
-          theme(plot.title = element_text(hjust = 0.5)) + 
-          NULL
-      }else if(box_type == "Violin plot"){
-        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor))+
-          geom_violin(notch=FALSE, alpha = 0.2, outlier.shape = NA)+
-          ylab(paste0(ifelse(log == "yes", "Log", ""), " Normalized Gene Expression")) + 
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+            axis.title.x = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 12, face = "bold"),
+            legend.title = element_text(size = 11, face = "bold"),
+            legend.text = element_text(size = 10),
+            legend.position = "right",
+            legend.background = element_rect(fill = "white", color = "gray80"),
+            legend.key = element_rect(fill = "white")
+          )
+        
+      } else if(box_type == "Violin plot"){
+        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
+          geom_violin(alpha = 0.2) +
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression")) + 
+          xlab("Sample Groups") +
           ggtitle(paste(gene, "Gene Expression")) +
-          scale_color_manual(values=  my_colors) + 
-          scale_fill_manual(values=  my_colors ) + 
+          scale_color_manual(values = my_colors, name = factor) + 
+          scale_fill_manual(values = my_colors, name = factor) + 
           theme_classic() + 
-          theme(plot.title = element_text(hjust = 0.5)) + 
-          NULL
-      }else if(box_type == "violin_points"){
-        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor))+
-          geom_violin(notch=FALSE, alpha = 0.2, outlier.shape = NA) +
-          geom_jitter()+
-          ylab(paste0(ifelse(log == "yes", "Log", ""), " Normalized Gene Expression")) + 
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+            axis.title.x = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 12, face = "bold"),
+            legend.title = element_text(size = 11, face = "bold"),
+            legend.text = element_text(size = 10),
+            legend.position = "right",
+            legend.background = element_rect(fill = "white", color = "gray80"),
+            legend.key = element_rect(fill = "white")
+          )
+        
+      } else if(box_type == "violin_points"){
+        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
+          geom_violin(alpha = 0.2) +
+          geom_jitter(size = 2, alpha = 0.6, width = 0.2) +
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression")) + 
+          xlab("Sample Groups") +
           ggtitle(paste(gene, "Gene Expression")) +
-          scale_color_manual(values=  my_colors) + 
-          scale_fill_manual(values=  my_colors ) + 
+          scale_color_manual(values = my_colors, name = factor) + 
+          scale_fill_manual(values = my_colors, name = factor) + 
           theme_classic() + 
-          theme(plot.title = element_text(hjust = 0.5)) + 
-          NULL
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+            axis.title.x = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 12, face = "bold"),
+            legend.title = element_text(size = 11, face = "bold"),
+            legend.text = element_text(size = 10),
+            legend.position = "right",
+            legend.background = element_rect(fill = "white", color = "gray80"),
+            legend.key = element_rect(fill = "white")
+          )
       }
     }
   }
 }
 
 # ------------------ SAMPLE DISTANCE HEATMAP ------------------
-#Run Sample Distance calculations
 run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, scale_type = "none") {
   
-  #Remove all non-numeric columns
   expr <- counts[, !(colnames(counts) %in% c("gene_id", "gene_name"))]
   
-  #Remove user-selected samples
   if (!is.null(remove_samples)) {
     expr <- expr[, !(colnames(expr) %in% remove_samples), drop = FALSE]
   }
   
-  #Filter out zero-variance genes
   expr <- expr[apply(expr, 1, var) > 0, , drop = FALSE]
   
-  #Compute euclidean distance and format as a square matrix
+  if (scale_type == "row") {
+    expr <- t(scale(t(expr)))
+  } else if (scale_type == "column") {
+    expr <- scale(expr)
+  } else if (scale_type == "log") {
+    expr <- log10(expr + 1)
+  }
+  
   dist_matrix <- dist(t(expr), method = "euclidean")
   dist_matrix <- as.matrix(dist_matrix)
   
-  #Set sample names
   rownames(dist_matrix) <- colnames(expr)
   colnames(dist_matrix) <- colnames(expr)
   
   return(dist_matrix)
 }
 
-
-#Plot Sample Distance Heatmap
 plot_sample_distance_heatmap <- function(dist_matrix,
                                          metadata = NULL,
                                          color_scheme = "Dark2",
@@ -715,7 +850,6 @@ plot_sample_distance_heatmap <- function(dist_matrix,
   
   dist_matrix <- as.matrix(dist_matrix)
   
-  # ---- Optional scaling ----
   if (tolower(scaling) == "row") {
     dist_matrix <- t(scale(t(dist_matrix)))
   } else if (tolower(scaling) == "column") {
@@ -724,10 +858,8 @@ plot_sample_distance_heatmap <- function(dist_matrix,
     dist_matrix <- log10(dist_matrix + 1)
   }
   
-  # Replace NaNs
   dist_matrix[is.na(dist_matrix)] <- 0
   
-  # ---- Optional annotation from metadata ----
   ann_colors <- NULL
   if (!is.null(metadata) && !is.null(color_by) && color_by %in% colnames(metadata)) {
     ann_colors <- metadata[, c("sample_id", color_by), drop = FALSE]
@@ -735,29 +867,29 @@ plot_sample_distance_heatmap <- function(dist_matrix,
     ann_colors <- ann_colors[rownames(dist_matrix), , drop = FALSE]
   }
   
-  # ---- STATIC GGPLOT VERSION ----
   if (heatmap_type == "ggplot") {
     dist_melt <- reshape2::melt(dist_matrix)
     colnames(dist_melt) <- c("Sample1", "Sample2", "Distance")
     
     p <- ggplot(dist_melt, aes(x = Sample1, y = Sample2, fill = Distance)) +
       geom_tile() +
-      scale_fill_distiller(palette = color_scheme, direction = 1, name = "Euclidean\nDistance") +
-      labs(title = "Sample Distance Heatmap", x = "", y = "") +
+      scale_fill_distiller(palette = color_scheme, direction = 1, name = "Distance") +
+      labs(
+        title = "Sample Distance Heatmap", 
+        x = "", 
+        y = ""
+      ) +
       theme_minimal() +
       theme(
+        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
         panel.grid = element_blank(),
-        axis.text.x = element_text(angle = 90, hjust = 1, size = 8),
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 8),
         axis.text.y = element_text(size = 8),
-        legend.position = "right",
-        legend.title = element_text(face = "bold", size = 11),
+        legend.title = element_text(size = 11, face = "bold"),
         legend.text = element_text(size = 9),
-        legend.key.height = unit(1.5, "cm"),
-        legend.key.width = unit(0.5, "cm"),
-        plot.title = element_text(hjust = 0.5, size = 14, face = "bold")
+        legend.position = "right"
       )
     
-    # Conditionally hide axis text
     if (show_names == "none") {
       p <- p + theme(axis.text.x = element_blank(), axis.text.y = element_blank())
     } else if (show_names == "x") {
@@ -769,32 +901,41 @@ plot_sample_distance_heatmap <- function(dist_matrix,
     return(p)
   }
   
-  # ---- INTERACTIVE HEATMAPLY VERSION ----
   else if (tolower(heatmap_type) == "heatmaply") {
     
-    # ---- Metadata colors ----
     side_colors <- NULL
+    side_palette <- NULL
     if (!is.null(ann_colors)) {
       side_colors <- data.frame(ann_colors[, color_by, drop = FALSE])
-      rownames(side_colors) <- ann_colors$sample_id
       colnames(side_colors) <- color_by
+      rownames(side_colors) <- ann_colors$sample_id
+      
+      # Create named color palette for side colors
+      unique_vals <- unique(side_colors[[color_by]])
+      n_colors <- length(unique_vals)
+      side_palette <- setNames(
+        colorRampPalette(brewer.pal(min(8, max(3, n_colors)), "Set2"))(n_colors),
+        unique_vals
+      )
     }
     
-    # ---- Clustering ----
-    hc <- if (cluster != "none") hclust(as.dist(dist_matrix), method = "complete") else NULL
-    Rowv <- if (!is.null(hc)) as.dendrogram(hc) else FALSE
-    Colv <- if (!is.null(hc)) as.dendrogram(hc) else FALSE
+    show_rowv <- cluster %in% c("row", "both")
+    show_colv <- cluster %in% c("column", "both")
     
-    order <- if (!is.null(hc)) hc$order else 1:nrow(dist_matrix)
-    dist_matrix <- dist_matrix[order, order]
-    if (!is.null(side_colors)) side_colors <- side_colors[order, , drop = FALSE]
+    if (dendrogram == "none") {
+      show_rowv <- FALSE
+      show_colv <- FALSE
+    } else if (dendrogram == "row") {
+      show_rowv <- TRUE
+      show_colv <- FALSE
+    } else if (dendrogram == "column") {
+      show_rowv <- FALSE
+      show_colv <- TRUE
+    } else if (dendrogram == "both") {
+      show_rowv <- TRUE
+      show_colv <- TRUE
+    }
     
-    # ---- Dendrogram visibility ----
-    dend_arg <- match.arg(tolower(dendrogram), c("none", "row", "column", "both"))
-    show_row_dend <- dend_arg %in% c("row", "both")
-    show_col_dend <- dend_arg %in% c("column", "both")
-    
-    # ---- Label control ----
     if (show_names == "none") {
       labRow <- NULL
       labCol <- NULL
@@ -809,42 +950,40 @@ plot_sample_distance_heatmap <- function(dist_matrix,
       labCol <- colnames(dist_matrix)
     }
     
-    # ---- Heatmap ----
     hm <- heatmaply::heatmaply(
       dist_matrix,
       colors = colorRampPalette(brewer.pal(9, color_scheme))(256),
-      Rowv = Rowv,
-      Colv = Colv,
-      dendrogram = "both",  # keep consistent ordering logic
+      Rowv = show_rowv,
+      Colv = show_colv,
       labRow = labRow,
       labCol = labCol,
-      main = "Sample Distance Heatmap",
       row_side_colors = side_colors,
       col_side_colors = side_colors,
+      row_side_palette = side_palette,
+      col_side_palette = side_palette,
+      main = "Sample Distance Heatmap",
       showticklabels = c(!is.null(labRow), !is.null(labCol)),
-      colorbar_xanchor = "right",
-      colorbar_yanchor = "middle",
-      colorbar_len = 0.7,
       colorbar_title = "Distance",
-      colorbar_thickness = 20,
-      colorbar_xpad = 10,
-      hide_colorbar = FALSE
+      width = 900,
+      height = 700
     )
     
-    # ---- Hide dendrograms visually ----
-    if (!show_row_dend) {
-      hm$x$layout$xaxis2 <- NULL
-      hm$x$data <- Filter(function(d) !grepl("Rowv", d$name %||% ""), hm$x$data)
-    }
-    if (!show_col_dend) {
-      hm$x$layout$yaxis2 <- NULL
-      hm$x$data <- Filter(function(d) !grepl("Colv", d$name %||% ""), hm$x$data)
-    }
+    hm <- hm %>% plotly::layout(
+      legend = list(
+        orientation = "v",
+        x = 1.3,
+        y = 0.5,
+        xanchor = "left",
+        yanchor = "middle",
+        bgcolor = 'rgba(255,255,255,0.9)',
+        bordercolor = '#636363',
+        borderwidth = 1
+      )
+    )
     
     return(hm)
   }
-}
-
+}  
 
 # ------------------ GENE EXPRESSION HEATMAP ------------------
 
@@ -854,7 +993,6 @@ prepare_gene_expression_matrix <- function(counts,
                                            remove_samples = NULL,
                                            scaling = "none") {
   
-  # Filter to selected genes
   if ("gene_name" %in% colnames(counts)) {
     gene_data <- counts[counts$gene_name %in% gene_list, ]
     rownames(gene_data) <- gene_data$gene_name
@@ -863,16 +1001,13 @@ prepare_gene_expression_matrix <- function(counts,
     gene_data <- counts[rownames(counts) %in% gene_list, ]
   }
   
-  # Remove specified samples
   if (!is.null(remove_samples) && length(remove_samples) > 0) {
     keep_cols <- setdiff(colnames(gene_data), remove_samples)
     gene_data <- gene_data[, keep_cols, drop = FALSE]
   }
   
-  # Convert to matrix
   expr_matrix <- as.matrix(gene_data)
   
-  # Apply scaling
   if (tolower(scaling) == "row") {
     expr_matrix <- t(scale(t(expr_matrix)))
   } else if (tolower(scaling) == "column") {
@@ -881,28 +1016,25 @@ prepare_gene_expression_matrix <- function(counts,
     expr_matrix <- log2(expr_matrix + 1)
   }
   
-  # Replace NaNs with 0
   expr_matrix[is.na(expr_matrix)] <- 0
   
   return(expr_matrix)
 }
 
-
 plot_gene_expression_heatmap <- function(expr_matrix,
                                          metadata = NULL,
-                                         heatmap_title = "Gene Expression Heatmap",
                                          color_by = NULL,
                                          sidebar_color_scheme = "Set1",
+                                         heatmap_title = "Gene Expression Heatmap",
                                          heatmap_color_scheme = "RdYlBu",
                                          scaling = "none",
-                                         cluster = "none",
-                                         dendrogram = "none",
+                                         cluster = "both",
+                                         dendrogram = "both",
                                          show_names = "both",
                                          heatmap_type = "ggplot") {
   
   expr_matrix <- as.matrix(expr_matrix)
   
-  # ---- Optional annotation from metadata ----
   ann_colors <- NULL
   side_colors <- NULL
   
@@ -910,40 +1042,34 @@ plot_gene_expression_heatmap <- function(expr_matrix,
     ann_colors <- metadata[, c("sample_id", color_by), drop = FALSE]
     rownames(ann_colors) <- ann_colors$sample_id
     
-    # Match to samples in matrix
     common_samples <- intersect(colnames(expr_matrix), ann_colors$sample_id)
     if (length(common_samples) > 0) {
       ann_colors <- ann_colors[common_samples, , drop = FALSE]
       side_colors <- data.frame(ann_colors[, color_by, drop = FALSE])
-      rownames(side_colors) <- ann_colors$sample_id
       colnames(side_colors) <- color_by
+      rownames(side_colors) <- ann_colors$sample_id
     }
   }
   
-  # ---- STATIC GGPLOT VERSION ----
   if (tolower(heatmap_type) == "ggplot") {
     expr_melt <- reshape2::melt(expr_matrix)
     colnames(expr_melt) <- c("Gene", "Sample", "Expression")
     
     p <- ggplot(expr_melt, aes(x = Sample, y = Gene, fill = Expression)) +
       geom_tile() +
-      scale_fill_distiller(palette = heatmap_color_scheme, direction = -1, 
-                           name = "Gene\nExpression") +
+      scale_fill_distiller(palette = heatmap_color_scheme, direction = -1, name = "Expression") +
       labs(title = heatmap_title, x = "", y = "") +
       theme_minimal() +
       theme(
         panel.grid = element_blank(),
+        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
         axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 8),
         axis.text.y = element_text(size = 8),
-        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
-        legend.position = "right",
-        legend.title = element_text(face = "bold", size = 11),
+        legend.title = element_text(size = 11, face = "bold"),
         legend.text = element_text(size = 9),
-        legend.key.height = unit(1.5, "cm"),
-        legend.key.width = unit(0.5, "cm")
+        legend.position = "right"
       )
     
-    # Conditionally hide axis text
     if (show_names == "none") {
       p <- p + theme(axis.text.x = element_blank(), axis.text.y = element_blank())
     } else if (show_names == "column" || show_names == "x") {
@@ -955,27 +1081,48 @@ plot_gene_expression_heatmap <- function(expr_matrix,
     return(p)
   }
   
-  # ---- INTERACTIVE HEATMAPLY VERSION ----
   else if (tolower(heatmap_type) == "heatmaply") {
     
-    # DETERMINE CLUSTERING BEHAVIOR
-    do_row_cluster <- cluster %in% c("row", "both")
-    do_col_cluster <- cluster %in% c("column", "both")
-    
-    # Determine what dendrograms to show
-    if (dendrogram == "none") {
-      show_dendrogram <- "none"
-    } else if (dendrogram == "row") {
-      show_dendrogram <- "row"
-    } else if (dendrogram == "column") {
-      show_dendrogram <- "column"
-    } else if (dendrogram == "both") {
-      show_dendrogram <- "both"
-    } else {
-      show_dendrogram <- "none"
+    side_colors <- NULL
+    side_palette <- NULL
+    if (!is.null(metadata) && !is.null(color_by) && color_by %in% colnames(metadata)) {
+      ann_colors <- metadata[, c("sample_id", color_by), drop = FALSE]
+      rownames(ann_colors) <- ann_colors$sample_id
+      
+      common_samples <- intersect(colnames(expr_matrix), ann_colors$sample_id)
+      if (length(common_samples) > 0) {
+        ann_colors <- ann_colors[common_samples, , drop = FALSE]
+        side_colors <- data.frame(ann_colors[, color_by, drop = FALSE])
+        colnames(side_colors) <- color_by
+        rownames(side_colors) <- ann_colors$sample_id
+        
+        # Create named color palette for side colors
+        unique_vals <- unique(side_colors[[color_by]])
+        n_colors <- length(unique_vals)
+        side_palette <- setNames(
+          colorRampPalette(brewer.pal(min(8, max(3, n_colors)), sidebar_color_scheme))(n_colors),
+          unique_vals
+        )
+      }
     }
     
-    # Control axis labels
+    show_rowv <- cluster %in% c("row", "both")
+    show_colv <- cluster %in% c("column", "both")
+    
+    if (dendrogram == "none") {
+      show_rowv <- FALSE
+      show_colv <- FALSE
+    } else if (dendrogram == "row") {
+      show_rowv <- TRUE
+      show_colv <- FALSE
+    } else if (dendrogram == "column") {
+      show_rowv <- FALSE
+      show_colv <- TRUE
+    } else if (dendrogram == "both") {
+      show_rowv <- TRUE
+      show_colv <- TRUE
+    }
+    
     if (show_names == "none") {
       labRow <- NULL
       labCol <- NULL
@@ -990,28 +1137,36 @@ plot_gene_expression_heatmap <- function(expr_matrix,
       labCol <- colnames(expr_matrix)
     }
     
-    # Build heatmap colors
     heatmap_colors <- colorRampPalette(rev(brewer.pal(11, heatmap_color_scheme)))(256)
-    
-    # Build the interactive heatmap
+
     hm <- heatmaply::heatmaply(
       expr_matrix,
       colors = heatmap_colors,
-      Rowv = do_row_cluster,
-      Colv = do_col_cluster,
-      dendrogram = show_dendrogram,
+      Rowv = show_rowv,
+      Colv = show_colv,
       labRow = labRow,
       labCol = labCol,
       main = heatmap_title,
       col_side_colors = side_colors,
+      col_side_palette = side_palette,
       showticklabels = c(!is.null(labRow), !is.null(labCol)),
-      colorbar_xanchor = "right",
-      colorbar_yanchor = "middle",
-      colorbar_len = 0.7,
       colorbar_title = "Expression",
-      colorbar_thickness = 20,
-      colorbar_xpad = 10,
-      hide_colorbar = FALSE
+      width = 900,
+      height = 700
+    )
+    
+    hm <- hm %>% plotly::layout(
+      legend = list(
+        orientation = "v",
+        x = 1.15,
+        y = 0.5,
+        xanchor = "left",
+        yanchor = "middle",
+        bgcolor = 'rgba(255,255,255,0.9)',
+        bordercolor = '#636363',
+        borderwidth = 1,
+        tracegroupgap = 10
+      )
     )
     
     return(hm)
