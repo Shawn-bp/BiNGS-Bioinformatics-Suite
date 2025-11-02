@@ -1,3 +1,4 @@
+
 # ------------------ PCA ------------------
 # Run PCA
 run_pca <- function(counts, metadata, scale_data = TRUE, remove_samples = NULL) {
@@ -689,15 +690,6 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
   #Filter out zero-variance genes
   expr <- expr[apply(expr, 1, var) > 0, , drop = FALSE]
   
-  #Do user-selected scaling
-  if (scale_type == "row") {
-    expr <- t(scale(t(expr)))   # scale each gene
-  } else if (scale_type == "column") {
-    expr <- scale(expr)         # scale each sample
-  } else if (scale_type == "log") {
-    expr <- log10(expr + 1)     # avoid log(0)
-  }
-  
   #Compute euclidean distance and format as a square matrix
   dist_matrix <- dist(t(expr), method = "euclidean")
   dist_matrix <- as.matrix(dist_matrix)
@@ -716,7 +708,7 @@ plot_sample_distance_heatmap <- function(dist_matrix,
                                          color_scheme = "Dark2",
                                          cluster = "none",
                                          dendrogram = "none",
-                                         show_names = "both",  # "none", "x", "y", or "both"
+                                         show_names = "both",
                                          scaling = "none",
                                          color_by = NULL,
                                          heatmap_type = "ggplot") {
@@ -750,16 +742,22 @@ plot_sample_distance_heatmap <- function(dist_matrix,
     
     p <- ggplot(dist_melt, aes(x = Sample1, y = Sample2, fill = Distance)) +
       geom_tile() +
-      scale_fill_distiller(palette = color_scheme, direction = 1) +
-      labs(title = "", x = "", y = "") +
+      scale_fill_distiller(palette = color_scheme, direction = 1, name = "Euclidean\nDistance") +
+      labs(title = "Sample Distance Heatmap", x = "", y = "") +
       theme_minimal() +
       theme(
         panel.grid = element_blank(),
         axis.text.x = element_text(angle = 90, hjust = 1, size = 8),
-        axis.text.y = element_text(size = 8)
+        axis.text.y = element_text(size = 8),
+        legend.position = "right",
+        legend.title = element_text(face = "bold", size = 11),
+        legend.text = element_text(size = 9),
+        legend.key.height = unit(1.5, "cm"),
+        legend.key.width = unit(0.5, "cm"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold")
       )
     
-    # Conditionally hide axis text AFTER creating the base theme
+    # Conditionally hide axis text
     if (show_names == "none") {
       p <- p + theme(axis.text.x = element_blank(), axis.text.y = element_blank())
     } else if (show_names == "x") {
@@ -774,32 +772,29 @@ plot_sample_distance_heatmap <- function(dist_matrix,
   # ---- INTERACTIVE HEATMAPLY VERSION ----
   else if (tolower(heatmap_type) == "heatmaply") {
     
-    # Create annotation colors if metadata exists
+    # ---- Metadata colors ----
     side_colors <- NULL
     if (!is.null(ann_colors)) {
       side_colors <- data.frame(ann_colors[, color_by, drop = FALSE])
       rownames(side_colors) <- ann_colors$sample_id
+      colnames(side_colors) <- color_by
     }
     
-    # Handle clustering and dendrogram independently
-    show_rowv <- cluster %in% c("row", "both")
-    show_colv <- cluster %in% c("column", "both")
+    # ---- Clustering ----
+    hc <- if (cluster != "none") hclust(as.dist(dist_matrix), method = "complete") else NULL
+    Rowv <- if (!is.null(hc)) as.dendrogram(hc) else FALSE
+    Colv <- if (!is.null(hc)) as.dendrogram(hc) else FALSE
     
-    if (dendrogram == "none") {
-      show_rowv <- FALSE
-      show_colv <- FALSE
-    } else if (dendrogram == "row") {
-      show_rowv <- TRUE
-      show_colv <- FALSE
-    } else if (dendrogram == "column") {
-      show_rowv <- FALSE
-      show_colv <- TRUE
-    } else if (dendrogram == "both") {
-      show_rowv <- TRUE
-      show_colv <- TRUE
-    }
+    order <- if (!is.null(hc)) hc$order else 1:nrow(dist_matrix)
+    dist_matrix <- dist_matrix[order, order]
+    if (!is.null(side_colors)) side_colors <- side_colors[order, , drop = FALSE]
     
-    # ---- Control axis labels ----
+    # ---- Dendrogram visibility ----
+    dend_arg <- match.arg(tolower(dendrogram), c("none", "row", "column", "both"))
+    show_row_dend <- dend_arg %in% c("row", "both")
+    show_col_dend <- dend_arg %in% c("column", "both")
+    
+    # ---- Label control ----
     if (show_names == "none") {
       labRow <- NULL
       labCol <- NULL
@@ -809,25 +804,47 @@ plot_sample_distance_heatmap <- function(dist_matrix,
     } else if (show_names == "y") {
       labRow <- NULL
       labCol <- colnames(dist_matrix)
-    } else { # both or NULL fallback
+    } else {
       labRow <- rownames(dist_matrix)
       labCol <- colnames(dist_matrix)
     }
     
-    # ---- Build the interactive heatmap ----
-    heatmaply::heatmaply(
+    # ---- Heatmap ----
+    hm <- heatmaply::heatmaply(
       dist_matrix,
       colors = colorRampPalette(brewer.pal(9, color_scheme))(256),
-      Rowv = show_rowv,
-      Colv = show_colv,
+      Rowv = Rowv,
+      Colv = Colv,
+      dendrogram = "both",  # keep consistent ordering logic
       labRow = labRow,
       labCol = labCol,
+      main = "Sample Distance Heatmap",
       row_side_colors = side_colors,
       col_side_colors = side_colors,
-      showticklabels = c(!is.null(labRow), !is.null(labCol)) # ensures axes update dynamically
+      showticklabels = c(!is.null(labRow), !is.null(labCol)),
+      colorbar_xanchor = "right",
+      colorbar_yanchor = "middle",
+      colorbar_len = 0.7,
+      colorbar_title = "Distance",
+      colorbar_thickness = 20,
+      colorbar_xpad = 10,
+      hide_colorbar = FALSE
     )
+    
+    # ---- Hide dendrograms visually ----
+    if (!show_row_dend) {
+      hm$x$layout$xaxis2 <- NULL
+      hm$x$data <- Filter(function(d) !grepl("Rowv", d$name %||% ""), hm$x$data)
+    }
+    if (!show_col_dend) {
+      hm$x$layout$yaxis2 <- NULL
+      hm$x$data <- Filter(function(d) !grepl("Colv", d$name %||% ""), hm$x$data)
+    }
+    
+    return(hm)
   }
-}  
+}
+
 
 # ------------------ GENE EXPRESSION HEATMAP ------------------
 
@@ -873,13 +890,13 @@ prepare_gene_expression_matrix <- function(counts,
 
 plot_gene_expression_heatmap <- function(expr_matrix,
                                          metadata = NULL,
+                                         heatmap_title = "Gene Expression Heatmap",
                                          color_by = NULL,
                                          sidebar_color_scheme = "Set1",
-                                         heatmap_title = "Gene Expression Heatmap",
                                          heatmap_color_scheme = "RdYlBu",
                                          scaling = "none",
-                                         cluster = "both",
-                                         dendrogram = "both",
+                                         cluster = "none",
+                                         dendrogram = "none",
                                          show_names = "both",
                                          heatmap_type = "ggplot") {
   
@@ -899,6 +916,7 @@ plot_gene_expression_heatmap <- function(expr_matrix,
       ann_colors <- ann_colors[common_samples, , drop = FALSE]
       side_colors <- data.frame(ann_colors[, color_by, drop = FALSE])
       rownames(side_colors) <- ann_colors$sample_id
+      colnames(side_colors) <- color_by
     }
   }
   
@@ -909,14 +927,20 @@ plot_gene_expression_heatmap <- function(expr_matrix,
     
     p <- ggplot(expr_melt, aes(x = Sample, y = Gene, fill = Expression)) +
       geom_tile() +
-      scale_fill_distiller(palette = heatmap_color_scheme, direction = -1) +
+      scale_fill_distiller(palette = heatmap_color_scheme, direction = -1, 
+                           name = "Gene\nExpression") +
       labs(title = heatmap_title, x = "", y = "") +
       theme_minimal() +
       theme(
         panel.grid = element_blank(),
         axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 8),
         axis.text.y = element_text(size = 8),
-        plot.title = element_text(hjust = 0.5)
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+        legend.position = "right",
+        legend.title = element_text(face = "bold", size = 11),
+        legend.text = element_text(size = 9),
+        legend.key.height = unit(1.5, "cm"),
+        legend.key.width = unit(0.5, "cm")
       )
     
     # Conditionally hide axis text
@@ -934,22 +958,21 @@ plot_gene_expression_heatmap <- function(expr_matrix,
   # ---- INTERACTIVE HEATMAPLY VERSION ----
   else if (tolower(heatmap_type) == "heatmaply") {
     
-    # Handle clustering and dendrogram
-    show_rowv <- cluster %in% c("row", "both")
-    show_colv <- cluster %in% c("column", "both")
+    # DETERMINE CLUSTERING BEHAVIOR
+    do_row_cluster <- cluster %in% c("row", "both")
+    do_col_cluster <- cluster %in% c("column", "both")
     
+    # Determine what dendrograms to show
     if (dendrogram == "none") {
-      show_rowv <- FALSE
-      show_colv <- FALSE
+      show_dendrogram <- "none"
     } else if (dendrogram == "row") {
-      show_rowv <- TRUE
-      show_colv <- FALSE
+      show_dendrogram <- "row"
     } else if (dendrogram == "column") {
-      show_rowv <- FALSE
-      show_colv <- TRUE
+      show_dendrogram <- "column"
     } else if (dendrogram == "both") {
-      show_rowv <- TRUE
-      show_colv <- TRUE
+      show_dendrogram <- "both"
+    } else {
+      show_dendrogram <- "none"
     }
     
     # Control axis labels
@@ -962,7 +985,7 @@ plot_gene_expression_heatmap <- function(expr_matrix,
     } else if (show_names == "row" || show_names == "y") {
       labRow <- rownames(expr_matrix)
       labCol <- NULL
-    } else { # both
+    } else {
       labRow <- rownames(expr_matrix)
       labCol <- colnames(expr_matrix)
     }
@@ -974,13 +997,21 @@ plot_gene_expression_heatmap <- function(expr_matrix,
     hm <- heatmaply::heatmaply(
       expr_matrix,
       colors = heatmap_colors,
-      Rowv = show_rowv,
-      Colv = show_colv,
+      Rowv = do_row_cluster,
+      Colv = do_col_cluster,
+      dendrogram = show_dendrogram,
       labRow = labRow,
       labCol = labCol,
       main = heatmap_title,
       col_side_colors = side_colors,
-      showticklabels = c(!is.null(labRow), !is.null(labCol))
+      showticklabels = c(!is.null(labRow), !is.null(labCol)),
+      colorbar_xanchor = "right",
+      colorbar_yanchor = "middle",
+      colorbar_len = 0.7,
+      colorbar_title = "Expression",
+      colorbar_thickness = 20,
+      colorbar_xpad = 10,
+      hide_colorbar = FALSE
     )
     
     return(hm)
