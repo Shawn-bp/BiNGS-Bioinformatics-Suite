@@ -1,3 +1,4 @@
+
 require(shiny)
 require(shinythemes)
 require(data.table)
@@ -306,11 +307,11 @@ ui <- fluidPage(
                       radioButtons("gene_heatmap_clustering_type",
                                    "Select the type of clustering to perform:",
                                    choices = as.list(clustering_list),
-                                   selected = clustering_list[[4]]),
+                                   selected = clustering_list[[1]]),
                       radioButtons("gene_heatmap_dendrogram_list",
                                    "Select the dendrograms to show:",
                                    choices = as.list(dendrogram_list),
-                                   selected = dendrogram_list[[4]]),
+                                   selected = dendrogram_list[[1]]),
                       radioButtons("gene_heatmap_show_names",
                                    "Show gene names:",
                                    choices = as.list(show_names_list),
@@ -591,8 +592,7 @@ server <- function(input, output, session) {
     run_sample_distance(
       counts = count_data(),
       metadata = sample_metadata(),
-      remove_samples = samples_remove,
-      scale_type = input$sample_distance_heatmap_scaling_type
+      remove_samples = samples_remove
     )
   })
   
