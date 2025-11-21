@@ -1,3 +1,4 @@
+
 # ------------------ PCA ------------------
 # Run PCA
 run_pca <- function(counts, metadata, scale_data = TRUE, remove_samples = NULL) {
@@ -33,14 +34,14 @@ run_pca <- function(counts, metadata, scale_data = TRUE, remove_samples = NULL) 
 }
 
 # Plot PCA
-plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL,
+plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL, shape_var = NULL,
                      palette = "Set1", plot_type = "ggplot") {
   
   x_label <- paste0(x_pc, " (", round(variance[as.numeric(gsub("PC", "", x_pc))], 2), "%)")
   y_label <- paste0(y_pc, " (", round(variance[as.numeric(gsub("PC", "", y_pc))], 2), "%)")
   
   if (plot_type == "ggplot") {
-    p <- ggplot(pca_coords, aes_string(x = x_pc, y = y_pc, color = color_var)) +
+    p <- ggplot(pca_coords, aes_string(x = x_pc, y = y_pc, color = color_var, shape = shape_var)) +
       geom_point(size = 4, alpha = 0.8) +
       scale_color_brewer(palette = palette, name = color_var) +
       labs(
@@ -57,14 +58,29 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL,
         legend.background = element_rect(fill = "white", color = "gray80"),
         legend.key = element_rect(fill = "white")
       )
+    
+    # Add shape scale if shape_var is provided
+    if (!is.null(shape_var) && shape_var != "") {
+      p <- p + scale_shape_discrete(name = shape_var)
+    }
+    
     return(p)
     
   } else if (plot_type == "plotly") {
+    
+    # Prepare symbol mapping for plotly if shape_var is provided
+    symbol_var <- NULL
+    if (!is.null(shape_var) && shape_var != "") {
+      symbol_var <- pca_coords[[shape_var]]
+    }
+    
     p <- plotly::plot_ly(
       pca_coords,
       x = ~get(x_pc),
       y = ~get(y_pc),
       color = if (!is.null(color_var)) pca_coords[[color_var]] else NULL,
+      symbol = symbol_var,
+      symbols = c('circle', 'square', 'diamond', 'cross', 'triangle-up', 'triangle-down'),
       colors = RColorBrewer::brewer.pal(max(3, length(unique(pca_coords[[color_var]]))), palette),
       type = "scatter",
       mode = "markers",
@@ -74,6 +90,7 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL,
         "<b>%{text}</b><br>",
         x_pc, ": %{x:.2f}<br>",
         y_pc, ": %{y:.2f}<br>",
+        if (!is.null(shape_var) && shape_var != "") paste0(shape_var, ": ", pca_coords[[shape_var]], "<br>") else "",
         "<extra></extra>"
       )
     ) %>% plotly::layout(
@@ -95,7 +112,7 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL,
         gridcolor = '#e0e0e0'
       ),
       legend = list(
-        title = list(text = paste0('<b>', color_var, '</b>')),
+        title = list(text = paste0('<b>', if (!is.null(color_var)) color_var else "", '</b>')),
         x = 1.02,
         y = 1,
         xanchor = "left",
@@ -990,8 +1007,7 @@ plot_sample_distance_heatmap <- function(dist_matrix,
 prepare_gene_expression_matrix <- function(counts, 
                                            metadata, 
                                            gene_list, 
-                                           remove_samples = NULL,
-                                           scaling = "none") {
+                                           remove_samples = NULL) {
   
   if ("gene_name" %in% colnames(counts)) {
     gene_data <- counts[counts$gene_name %in% gene_list, ]
@@ -1008,14 +1024,6 @@ prepare_gene_expression_matrix <- function(counts,
   
   expr_matrix <- as.matrix(gene_data)
   
-  if (tolower(scaling) == "row") {
-    expr_matrix <- t(scale(t(expr_matrix)))
-  } else if (tolower(scaling) == "column") {
-    expr_matrix <- scale(expr_matrix)
-  } else if (tolower(scaling) == "log") {
-    expr_matrix <- log2(expr_matrix + 1)
-  }
-  
   expr_matrix[is.na(expr_matrix)] <- 0
   
   return(expr_matrix)
@@ -1027,9 +1035,9 @@ plot_gene_expression_heatmap <- function(expr_matrix,
                                          sidebar_color_scheme = "Set1",
                                          heatmap_title = "Gene Expression Heatmap",
                                          heatmap_color_scheme = "RdYlBu",
-                                         scaling = "none",
                                          cluster = "both",
                                          dendrogram = "both",
+                                         scaling = "none",
                                          show_names = "both",
                                          heatmap_type = "ggplot") {
   
@@ -1052,6 +1060,15 @@ plot_gene_expression_heatmap <- function(expr_matrix,
   }
   
   if (tolower(heatmap_type) == "ggplot") {
+    # Apply scaling before melting the data
+    if (tolower(scaling) == "row") {
+      expr_matrix <- t(scale(t(expr_matrix)))
+    } else if (tolower(scaling) == "column") {
+      expr_matrix <- scale(expr_matrix)
+    } else if (tolower(scaling) == "log") {
+      expr_matrix <- log2(expr_matrix + 1)
+    }
+    
     expr_melt <- reshape2::melt(expr_matrix)
     colnames(expr_melt) <- c("Gene", "Sample", "Expression")
     
@@ -1123,6 +1140,14 @@ plot_gene_expression_heatmap <- function(expr_matrix,
       show_colv <- TRUE
     }
     
+    if (tolower(scaling) == "row") {
+      expr_matrix <- t(scale(t(expr_matrix)))
+    } else if (tolower(scaling) == "column") {
+      expr_matrix <- scale(expr_matrix)
+    } else if (tolower(scaling) == "log") {
+      expr_matrix <- log2(expr_matrix + 1)
+    }
+    
     if (show_names == "none") {
       labRow <- NULL
       labCol <- NULL
@@ -1138,7 +1163,7 @@ plot_gene_expression_heatmap <- function(expr_matrix,
     }
     
     heatmap_colors <- colorRampPalette(rev(brewer.pal(11, heatmap_color_scheme)))(256)
-
+    
     hm <- heatmaply::heatmaply(
       expr_matrix,
       colors = heatmap_colors,
