@@ -1,4 +1,5 @@
 
+
 require(shiny)
 require(shinythemes)
 require(data.table)
@@ -78,6 +79,13 @@ ui <- fluidPage(
                         options = list(`actions-box` = TRUE),
                         multiple = FALSE
                       ),
+                      selectizeInput(
+                        "shape_var",
+                        label = "Change sample shapes by:",
+                        choices = NULL,
+                        options = list(`actions-box` = TRUE),
+                        multiple = FALSE
+                        ),
                       radioButtons("pca_color_palette",
                                    "Select the color palette to use:",
                                    choices = as.list(pca_color_palette_list),
@@ -451,6 +459,12 @@ server <- function(input, output, session) {
                          selected = if ("condition" %in% colnames(sample_metadata())) "condition" else setdiff(colnames(sample_metadata()), pca_metadata_columns_to_remove)[1],
                          server = TRUE)
   })
+  observeEvent(sample_metadata(), {
+    updateSelectizeInput(session, "shape_var", label = "Change sample shapes by:",
+                         choices = setdiff(colnames(sample_metadata()), pca_metadata_columns_to_remove),
+                         selected = if ("condition" %in% colnames(sample_metadata())) "condition" else setdiff(colnames(sample_metadata()), pca_metadata_columns_to_remove)[1],
+                         server = TRUE)
+  })
   
   observeEvent(input$PCA_run_button, {
     output$pca_ggplot <- renderPlot({
@@ -462,7 +476,8 @@ server <- function(input, output, session) {
         y_pc       = input$y_pc,
         color_var  = input$color_var,
         palette    = input$pca_color_palette,
-        plot_type  = "ggplot"
+        plot_type  = "ggplot",
+        shape_var  = input$shape_var
       )
     })
     
@@ -475,7 +490,8 @@ server <- function(input, output, session) {
         y_pc       = input$y_pc,
         color_var  = input$color_var,
         palette    = input$pca_color_palette,
-        plot_type  = "plotly"
+        plot_type  = "plotly",
+        shape_var  = input$shape_var
       )
     })
   })
@@ -662,7 +678,7 @@ server <- function(input, output, session) {
     sample_choices <- colnames(count_data())
     sample_choices <- sample_choices[!sample_choices %in% c("gene_id", "gene_name")]
     updateSelectizeInput(session, "samples_to_remove_select",
-                         label = "Select samples to remove (optional):",
+                         label = "Select samples to remove:",
                          choices = sample_choices,
                          selected = NULL,
                          server = TRUE)
@@ -691,8 +707,7 @@ server <- function(input, output, session) {
       counts = count_data(),
       metadata = sample_metadata(),
       gene_list = gene_list,
-      remove_samples = samples_remove,
-      scaling = input$gene_heatmap_scaling_type
+      remove_samples = samples_remove
     )
   })
   
