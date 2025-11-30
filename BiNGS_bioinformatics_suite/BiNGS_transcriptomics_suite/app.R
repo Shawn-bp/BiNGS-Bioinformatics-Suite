@@ -9,6 +9,7 @@ require(DT)
 require(plotly)
 require(fst)
 require(ggpubr)
+require(matrixStats)
 require(heatmaply)
 library(RColorBrewer)
 source("helper.R")
@@ -229,12 +230,8 @@ ui <- fluidPage(
                                    "Select the type of scaling to perform:",
                                    choices = as.list(scaling_list),
                                    selected = scaling_list[[1]]),
-                      radioButtons("sample_distance_heatmap_clustering_type",
-                                   "Select the type of clustering to perform:",
-                                   choices = as.list(clustering_list),
-                                   selected = clustering_list[[1]]),
                       radioButtons("sample_distance_heatmap_dendrogram_list",
-                                   "Select the dendrograms to show:",
+                                   "Select the type of clustering to perform:",
                                    choices = as.list(dendrogram_list),
                                    selected = dendrogram_list[[1]]),
                       radioButtons("Sample_Distance_Heatmap_Plot_type",
@@ -312,12 +309,8 @@ ui <- fluidPage(
                                    "Select the type of scaling to perform:",
                                    choices = as.list(scaling_list),
                                    selected = scaling_list[[1]]),
-                      radioButtons("gene_heatmap_clustering_type",
-                                   "Select the type of clustering to perform:",
-                                   choices = as.list(clustering_list),
-                                   selected = clustering_list[[1]]),
                       radioButtons("gene_heatmap_dendrogram_list",
-                                   "Select the dendrograms to show:",
+                                   "Select the type of clustering to perform:",
                                    choices = as.list(dendrogram_list),
                                    selected = dendrogram_list[[1]]),
                       radioButtons("gene_heatmap_show_names",
@@ -381,11 +374,14 @@ server <- function(input, output, session) {
   
   # --- Sync sample removal across all tabs ---
   removed_samples <- reactiveVal(NULL)
+  updating_samples <- reactiveVal(FALSE)
   
   # Update all sample removal dropdowns when data loads
   observeEvent(count_data(), {
     sample_choices <- colnames(count_data())
     sample_choices <- sample_choices[!sample_choices %in% c("gene_id", "gene_name")]
+    
+    updating_samples(TRUE)
     
     updateSelectizeInput(session, "pca_samples_to_remove", 
                          choices = sample_choices, 
@@ -403,6 +399,8 @@ server <- function(input, output, session) {
                          choices = sample_choices, 
                          selected = removed_samples(),
                          server = TRUE)
+    
+    updating_samples(FALSE)
   })
   
   # Sync PCA removal to all other tabs
@@ -612,43 +610,60 @@ server <- function(input, output, session) {
     )
   })
   
-  # ---- Render static ggplot heatmap ----
-  output$sample_distance_heatmap <- renderPlot({
-    req(dist_matrix_reactive())
-    dist_mat <- dist_matrix_reactive()
-    
-    p <- plot_sample_distance_heatmap(
-      dist_matrix = dist_matrix_reactive(),
-      metadata = sample_metadata(),
-      color_scheme = input$sample_distance_heatmap_color_palette,
-      cluster = input$sample_distance_heatmap_clustering_type,
-      dendrogram = input$sample_distance_heatmap_dendrogram_list,
-      show_names = input$sample_distance_heatmap_show_names,
-      scaling = input$sample_distance_heatmap_scaling_type,
-      color_by = input$metadata_color_bars,
-      heatmap_type = "ggplot"
-    )
-    print(p)
-  })
+# ---- Render static ggplot heatmap ----
+output$sample_distance_heatmap <- renderPlot({
+  req(count_data(), sample_metadata())
   
-  # heatmaply render
-  output$sample_distance_heatmaply <- renderPlotly({
-    req(dist_matrix_reactive())
-    dist_mat <- dist_matrix_reactive()
-    
-    hm <- plot_sample_distance_heatmap(
-      dist_matrix = dist_matrix_reactive(),
-      metadata = sample_metadata(),
-      color_scheme = input$sample_distance_heatmap_color_palette,
-      cluster = input$sample_distance_heatmap_clustering_type,
-      dendrogram = input$sample_distance_heatmap_dendrogram_list,
-      show_names = input$sample_distance_heatmap_show_names,
-      scaling = input$sample_distance_heatmap_scaling_type,
-      color_by = input$metadata_color_bars,
-      heatmap_type = "heatmaply"
+  p <- plot_sample_distance_heatmap(
+    counts = count_data(),
+    metadata = sample_metadata(),
+    ntop = 500,  # or use input$ntop_genes if you have that input
+    color_by = input$metadata_color_bars,
+    sidebar_color_scheme = "Set1",  # or make this an input
+    heatmap_title = "Sample Distance Heatmap",
+    heatmap_color_scheme = input$sample_distance_heatmap_color_palette,
+    column_text_angle = 45,
+    show_dendrogram = c(
+      input$sample_distance_heatmap_dendrogram_list %in% c("row", "both"),
+      input$sample_distance_heatmap_dendrogram_list %in% c("column", "both")
+    ),
+    plot_type = "ggplot",
+    show_tick_labels = c(
+      input$sample_distance_heatmap_show_names %in% c("row", "both"),
+      input$sample_distance_heatmap_show_names %in% c("column", "both")
     )
-    return(hm)
-  })
+  )
+  print(p)
+})
+
+# ---- Render heatmaply ----
+output$sample_distance_heatmaply <- renderPlotly({
+  req(count_data(), sample_metadata())
+  
+  hm <- plot_sample_distance_heatmap(
+    counts = count_data(),
+    metadata = sample_metadata(),
+    ntop = 500,  # or use input$ntop_genes if you have that input
+    color_by = input$metadata_color_bars,
+    sidebar_color_scheme = "Set1",  # or make this an input
+    heatmap_title = "Sample Distance Heatmap",
+    heatmap_color_scheme = input$sample_distance_heatmap_color_palette,
+    column_text_angle = 45,
+    show_dendrogram = c(
+      input$sample_distance_heatmap_dendrogram_list %in% c("row", "both"),
+      input$sample_distance_heatmap_dendrogram_list %in% c("column", "both")
+    ),
+    plot_type = "heatmaply",
+    show_tick_labels = c(
+      input$sample_distance_heatmap_show_names %in% c("row", "both"),
+      input$sample_distance_heatmap_show_names %in% c("column", "both")
+    ),
+    colorbar_xpos = 1.02,
+    colorbar_ypos = 0.5,
+    colorbar_len = 0.4
+  )
+  return(hm)
+})
   
   # ---- Download distance matrix ----
   output$download_distance_matrix <- downloadHandler(
