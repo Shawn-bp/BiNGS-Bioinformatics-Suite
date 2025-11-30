@@ -1,3 +1,4 @@
+
 #------------------- PCA specific variables ------------------- 
 pca_color_palette_list = c(
   "Set1 (Bright reds/blues)" = "Set1",
@@ -58,8 +59,6 @@ fact_var = "condition"
 
 #------------------- Heatmap specific variables ------------------- 
 scaling_list = c("None" = "none", "Row" = "row", "Column" = "column", "Log scale" = "log")
-
-clustering_list = c("None" = "none", "Row" = "row", "Column" = "column", "Both" = "both")
 
 dendrogram_list = c("None" = "none", "Row" = "row", "Column" = "column", "Both" = "both")
 
