@@ -571,7 +571,7 @@ server <- function(input, output, session) {
     content = function(file) { write.csv(pvalue_df(), file, row.names = FALSE) }
   )
   
-  # ---------------- HEATMAP ----------------
+  # ---------------- SAMPLE DISTANCE HEATMAP ----------------
   observeEvent(count_data(), {
     # sample names (exclude gene_id / gene_name columns if present)
     sample_choices <- colnames(count_data())
@@ -606,64 +606,63 @@ server <- function(input, output, session) {
     run_sample_distance(
       counts = count_data(),
       metadata = sample_metadata(),
-      remove_samples = samples_remove
+      remove_samples = samples_remove,
+      scale_type = input$sample_distance_heatmap_scaling_type
     )
   })
   
-# ---- Render static ggplot heatmap ----
-output$sample_distance_heatmap <- renderPlot({
-  req(count_data(), sample_metadata())
-  
-  p <- plot_sample_distance_heatmap(
-    counts = count_data(),
-    metadata = sample_metadata(),
-    ntop = 500,  # or use input$ntop_genes if you have that input
-    color_by = input$metadata_color_bars,
-    sidebar_color_scheme = "Set1",  # or make this an input
-    heatmap_title = "Sample Distance Heatmap",
-    heatmap_color_scheme = input$sample_distance_heatmap_color_palette,
-    column_text_angle = 45,
-    show_dendrogram = c(
-      input$sample_distance_heatmap_dendrogram_list %in% c("row", "both"),
-      input$sample_distance_heatmap_dendrogram_list %in% c("column", "both")
-    ),
-    plot_type = "ggplot",
-    show_tick_labels = c(
-      input$sample_distance_heatmap_show_names %in% c("row", "both"),
-      input$sample_distance_heatmap_show_names %in% c("column", "both")
+  # ---- Render static ggplot heatmap ----
+  output$sample_distance_heatmap <- renderPlot({
+    req(count_data(), sample_metadata())
+    
+    p <- plot_sample_distance_heatmap(
+      dist_matrix = dist_matrix_reactive(),
+      metadata = sample_metadata(),
+      color_by = input$metadata_color_bars,
+      sidebar_color_scheme = "Set1",
+      heatmap_title = "Sample Distance Heatmap",
+      heatmap_color_scheme = input$sample_distance_heatmap_color_palette,
+      column_text_angle = 45,
+      show_dendrogram = c(
+        input$sample_distance_heatmap_dendrogram_list %in% c("row", "both"),
+        input$sample_distance_heatmap_dendrogram_list %in% c("column", "both")
+      ),
+      plot_type = "ggplot",
+      show_tick_labels = c(
+        input$sample_distance_heatmap_show_names %in% c("row", "both"),
+        input$sample_distance_heatmap_show_names %in% c("column", "both")
+      )
     )
-  )
-  print(p)
-})
-
-# ---- Render heatmaply ----
-output$sample_distance_heatmaply <- renderPlotly({
-  req(count_data(), sample_metadata())
+    print(p)
+  })
   
-  hm <- plot_sample_distance_heatmap(
-    counts = count_data(),
-    metadata = sample_metadata(),
-    ntop = 500,  # or use input$ntop_genes if you have that input
-    color_by = input$metadata_color_bars,
-    sidebar_color_scheme = "Set1",  # or make this an input
-    heatmap_title = "Sample Distance Heatmap",
-    heatmap_color_scheme = input$sample_distance_heatmap_color_palette,
-    column_text_angle = 45,
-    show_dendrogram = c(
-      input$sample_distance_heatmap_dendrogram_list %in% c("row", "both"),
-      input$sample_distance_heatmap_dendrogram_list %in% c("column", "both")
-    ),
-    plot_type = "heatmaply",
-    show_tick_labels = c(
-      input$sample_distance_heatmap_show_names %in% c("row", "both"),
-      input$sample_distance_heatmap_show_names %in% c("column", "both")
-    ),
-    colorbar_xpos = 1.02,
-    colorbar_ypos = 0.5,
-    colorbar_len = 0.4
-  )
-  return(hm)
-})
+  # ---- Render heatmaply ----
+  output$sample_distance_heatmaply <- renderPlotly({
+    req(count_data(), sample_metadata())
+    
+    hm <- plot_sample_distance_heatmap(
+      dist_matrix = dist_matrix_reactive(),
+      metadata = sample_metadata(),
+      color_by = input$metadata_color_bars,
+      sidebar_color_scheme = "Set1",
+      heatmap_title = "Sample Distance Heatmap",
+      heatmap_color_scheme = input$sample_distance_heatmap_color_palette,
+      column_text_angle = 45,
+      show_dendrogram = c(
+        input$sample_distance_heatmap_dendrogram_list %in% c("row", "both"),
+        input$sample_distance_heatmap_dendrogram_list %in% c("column", "both")
+      ),
+      plot_type = "heatmaply",
+      show_tick_labels = c(
+        input$sample_distance_heatmap_show_names %in% c("row", "both"),
+        input$sample_distance_heatmap_show_names %in% c("column", "both")
+      ),
+      colorbar_xpos = 1.02,
+      colorbar_ypos = 0.5,
+      colorbar_len = 0.4
+    )
+    return(hm)
+  })
   
   # ---- Download distance matrix ----
   output$download_distance_matrix <- downloadHandler(
@@ -761,7 +760,7 @@ output$sample_distance_heatmaply <- renderPlotly({
       cluster = input$gene_heatmap_clustering_type,
       dendrogram = input$gene_heatmap_dendrogram_list,
       show_names = input$gene_heatmap_show_names,
-      heatmap_type = "heatmaply"
+      heatmap_type = input$gene_heatmap_plot_type
     )
   })
   
