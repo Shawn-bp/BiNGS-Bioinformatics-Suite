@@ -829,8 +829,10 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
   }
 }
 
-# ------------------ SAMPLE DISTANCE HEATMAP ------------------
-run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, scale_type = "none") {
+## ------------------ SAMPLE DISTANCE HEATMAP ------------------
+
+# Calculate distance matrix (used by reactive)
+run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, scale_type = "none", ntop = NULL) {
   
   expr <- counts[, !(colnames(counts) %in% c("gene_id", "gene_name"))]
   
@@ -840,6 +842,14 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
   
   expr <- expr[apply(expr, 1, var) > 0, , drop = FALSE]
   
+  # Select top variable genes if specified
+  if (!is.null(ntop) && ntop < nrow(expr)) {
+    gene_vars <- apply(expr, 1, var)
+    select <- order(gene_vars, decreasing = TRUE)[1:min(ntop, nrow(expr))]
+    expr <- expr[select, , drop = FALSE]
+  }
+  
+  # Apply scaling
   if (scale_type == "row") {
     expr <- t(scale(t(expr)))
   } else if (scale_type == "column") {
@@ -857,9 +867,8 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
   return(dist_matrix)
 }
 
-plot_sample_distance_heatmap <- function(counts, 
+plot_sample_distance_heatmap <- function(dist_matrix, 
                                          metadata = NULL,
-                                         ntop = 500, 
                                          color_by = NULL,
                                          sidebar_color_scheme = "Set1",
                                          heatmap_title = "Sample Distance Heatmap",
@@ -874,22 +883,11 @@ plot_sample_distance_heatmap <- function(counts,
                                          show_tick_labels = c(TRUE, TRUE),
                                          colorbar_len = 0.4) {
   
-  # Remove gene_id and gene_name columns if present
-  expr_data <- counts[, !colnames(counts) %in% c("gene_id", "gene_name"), drop = FALSE]
-  expr_matrix <- as.matrix(expr_data)
+  # Use the pre-calculated distance matrix
+  sampleDistMatrix <- dist_matrix
   
-  # Calculate variance for each gene and select top variable genes
-  rv <- matrixStats::rowVars(expr_matrix)
-  select <- order(rv, decreasing = TRUE)[seq_len(min(ntop, length(rv)))]
-  
-  # Calculate sample distances
-  sampleDists <- dist(t(expr_matrix[select, ]))
-  sampleDistMatrix <- as.matrix(sampleDists)
-  
-  # Set row and column names
-  sample_names <- colnames(expr_matrix)
-  rownames(sampleDistMatrix) <- sample_names
-  colnames(sampleDistMatrix) <- sample_names
+  # Get sample names from the matrix
+  sample_names <- rownames(sampleDistMatrix)
   
   # Prepare side colors if metadata and color_by are provided
   row_side_colors <- NULL
@@ -1016,7 +1014,8 @@ plot_sample_distance_heatmap <- function(counts,
     
     return(p)
   }
-} 
+}
+
 
 # ------------------ GENE EXPRESSION HEATMAP ------------------
 
@@ -1059,8 +1058,9 @@ plot_gene_expression_heatmap <- function(expr_matrix,
   
   expr_matrix <- as.matrix(expr_matrix)
   
-  ann_colors <- NULL
-  side_colors <- NULL
+  # Prepare annotation colors
+  annotation_df <- NULL
+  row_side_palette <- NULL
   
   if (!is.null(metadata) && !is.null(color_by) && color_by %in% colnames(metadata)) {
     ann_colors <- metadata[, c("sample_id", color_by), drop = FALSE]
@@ -1068,135 +1068,91 @@ plot_gene_expression_heatmap <- function(expr_matrix,
     
     common_samples <- intersect(colnames(expr_matrix), ann_colors$sample_id)
     if (length(common_samples) > 0) {
-      ann_colors <- ann_colors[common_samples, , drop = FALSE]
-      side_colors <- data.frame(ann_colors[, color_by, drop = FALSE])
-      colnames(side_colors) <- color_by
-      rownames(side_colors) <- ann_colors$sample_id
-    }
-  }
-  
-  if (tolower(heatmap_type) == "ggplot") {
-    # Apply scaling before melting the data
-    if (tolower(scaling) == "row") {
-      expr_matrix <- t(scale(t(expr_matrix)))
-    } else if (tolower(scaling) == "column") {
-      expr_matrix <- scale(expr_matrix)
-    } else if (tolower(scaling) == "log") {
-      expr_matrix <- log2(expr_matrix + 1)
-    }
-    
-    expr_melt <- reshape2::melt(expr_matrix)
-    colnames(expr_melt) <- c("Gene", "Sample", "Expression")
-    
-    p <- ggplot(expr_melt, aes(x = Sample, y = Gene, fill = Expression)) +
-      geom_tile() +
-      scale_fill_distiller(palette = heatmap_color_scheme, direction = -1, name = "Expression") +
-      labs(title = heatmap_title, x = "", y = "") +
-      theme_minimal() +
-      theme(
-        panel.grid = element_blank(),
-        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
-        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 8),
-        axis.text.y = element_text(size = 8),
-        legend.title = element_text(size = 11, face = "bold"),
-        legend.text = element_text(size = 9),
-        legend.position = "right"
-      )
-    
-    if (show_names == "none") {
-      p <- p + theme(axis.text.x = element_blank(), axis.text.y = element_blank())
-    } else if (show_names == "column" || show_names == "x") {
-      p <- p + theme(axis.text.y = element_blank())
-    } else if (show_names == "row" || show_names == "y") {
-      p <- p + theme(axis.text.x = element_blank())
-    }
-    
-    return(p)
-  }
-  
-  else if (tolower(heatmap_type) == "heatmaply") {
-    
-    side_colors <- NULL
-    side_palette <- NULL
-    if (!is.null(metadata) && !is.null(color_by) && color_by %in% colnames(metadata)) {
-      ann_colors <- metadata[, c("sample_id", color_by), drop = FALSE]
-      rownames(ann_colors) <- ann_colors$sample_id
+      annotation_df <- ann_colors[common_samples, , drop = FALSE]
+      colnames(annotation_df) <- c("sample_id", "group")
       
-      common_samples <- intersect(colnames(expr_matrix), ann_colors$sample_id)
-      if (length(common_samples) > 0) {
-        ann_colors <- ann_colors[common_samples, , drop = FALSE]
-        side_colors <- data.frame(ann_colors[, color_by, drop = FALSE])
-        colnames(side_colors) <- color_by
-        rownames(side_colors) <- ann_colors$sample_id
-        
-        # Create named color palette for side colors
-        unique_vals <- unique(side_colors[[color_by]])
-        n_colors <- length(unique_vals)
-        side_palette <- setNames(
-          colorRampPalette(brewer.pal(min(8, max(3, n_colors)), sidebar_color_scheme))(n_colors),
-          unique_vals
-        )
+      # Create color palette
+      unique_vals <- unique(annotation_df$group)
+      n_colors <- length(unique_vals)
+      row_side_palette <- setNames(
+        colorRampPalette(RColorBrewer::brewer.pal(min(8, max(3, n_colors)), sidebar_color_scheme))(n_colors),
+        unique_vals
+      )
+    }
+  }
+  
+  # ==== HEATMAPLY VERSION ====
+  if (tolower(heatmap_type) == "heatmaply") {
+    
+    # Prepare side colors for heatmaply
+    row_side_colors <- NULL
+    
+    if (!is.null(annotation_df)) {
+      row_side_colors <- data.frame(annotation_df[, "group", drop = FALSE])
+      colnames(row_side_colors) <- color_by
+      rownames(row_side_colors) <- annotation_df$sample_id
+    }
+    
+    # Select color scheme
+    selected_colors <- c()
+    if (length(heatmap_color_scheme) == 1) {
+      if (heatmap_color_scheme == "viridis") {
+        selected_colors <- viridis::viridis(n = 256, alpha = 1, begin = 0, end = 1)
+      } else if (heatmap_color_scheme == "magma") {
+        selected_colors <- viridis::magma(n = 256, alpha = 1, begin = 0, end = 1)
+      } else if (heatmap_color_scheme == "RdYlBu") {
+        selected_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "RdYlBu")))(256)
+      } else {
+        selected_colors <- colorRampPalette(RColorBrewer::brewer.pal(9, heatmap_color_scheme))(256)
       }
+    } else {
+      selected_colors <- heatmap_color_scheme
     }
     
-    show_rowv <- cluster %in% c("row", "both")
-    show_colv <- cluster %in% c("column", "both")
-    
-    if (dendrogram == "none") {
-      show_rowv <- FALSE
-      show_colv <- FALSE
-    } else if (dendrogram == "row") {
-      show_rowv <- TRUE
-      show_colv <- FALSE
-    } else if (dendrogram == "column") {
-      show_rowv <- FALSE
-      show_colv <- TRUE
-    } else if (dendrogram == "both") {
-      show_rowv <- TRUE
-      show_colv <- TRUE
-    }
-    
+    # Apply scaling
     if (tolower(scaling) == "row") {
       expr_matrix <- t(scale(t(expr_matrix)))
+      expr_matrix[is.na(expr_matrix)] <- 0
+      expr_matrix[is.infinite(expr_matrix)] <- 0
     } else if (tolower(scaling) == "column") {
       expr_matrix <- scale(expr_matrix)
+      expr_matrix[is.na(expr_matrix)] <- 0
+      expr_matrix[is.infinite(expr_matrix)] <- 0
     } else if (tolower(scaling) == "log") {
       expr_matrix <- log2(expr_matrix + 1)
     }
     
-    if (show_names == "none") {
-      labRow <- NULL
-      labCol <- NULL
-    } else if (show_names == "column" || show_names == "x") {
-      labRow <- NULL
-      labCol <- colnames(expr_matrix)
-    } else if (show_names == "row" || show_names == "y") {
-      labRow <- rownames(expr_matrix)
-      labCol <- NULL
-    } else {
-      labRow <- rownames(expr_matrix)
-      labCol <- colnames(expr_matrix)
-    }
+    # Determine dendrograms
+    show_row_dend <- dendrogram %in% c("row", "both")
+    show_col_dend <- dendrogram %in% c("column", "both")
     
-    heatmap_colors <- colorRampPalette(rev(brewer.pal(11, heatmap_color_scheme)))(256)
+    # Determine tick labels
+    show_row_labels <- show_names %in% c("row", "y", "both")
+    show_col_labels <- show_names %in% c("column", "x", "both")
     
-    hm <- heatmaply::heatmaply(
+    # Create heatmaply
+    p <- heatmaply::heatmaply(
       expr_matrix,
-      colors = heatmap_colors,
-      Rowv = show_rowv,
-      Colv = show_colv,
-      labRow = labRow,
-      labCol = labCol,
+      colors = selected_colors,
       main = heatmap_title,
-      col_side_colors = side_colors,
-      col_side_palette = side_palette,
-      showticklabels = c(!is.null(labRow), !is.null(labCol)),
-      colorbar_title = "Expression",
+      xlab = "",
+      ylab = "",
+      Rowv = if (cluster %in% c("row", "both")) TRUE else FALSE,
+      Colv = if (cluster %in% c("column", "both")) TRUE else FALSE,
+      dendrogram = dendrogram,
+      col_side_colors = row_side_colors,
+      col_side_palette = row_side_palette,
+      showticklabels = c(show_row_labels, show_col_labels),
+      key.title = "Expression",
+      plot_method = "plotly",
       width = 900,
       height = 700
     )
     
-    hm <- hm %>% plotly::layout(
+    # Enhance layout
+    p <- p %>% plotly::layout(
+      xaxis = list(title = xlab),
+      yaxis = list(title = ylab),
       legend = list(
         orientation = "v",
         x = 1.15,
@@ -1205,11 +1161,240 @@ plot_gene_expression_heatmap <- function(expr_matrix,
         yanchor = "middle",
         bgcolor = 'rgba(255,255,255,0.9)',
         bordercolor = '#636363',
-        borderwidth = 1,
-        tracegroupgap = 10
+        borderwidth = 1
       )
     )
     
-    return(hm)
+    p <- configure_plotly_panel(p, exportFormat = "svg")
+    return(p)
+    
+  }
+  
+  # ==== GGPLOT VERSION ====
+  else if (tolower(heatmap_type) == "ggplot") {
+    
+    # Perform clustering on UNSCALED data
+    row_order <- rownames(expr_matrix)
+    col_order <- colnames(expr_matrix)
+    row_hclust <- NULL
+    col_hclust <- NULL
+    
+    if (cluster %in% c("row", "both") || dendrogram %in% c("row", "both")) {
+      tryCatch({
+        # Remove any rows with NA, Inf, or zero variance
+        valid_rows <- apply(expr_matrix, 1, function(x) {
+          !any(is.na(x)) && !any(is.infinite(x)) && var(x, na.rm = TRUE) > 0
+        })
+        
+        if (sum(valid_rows) > 1) {
+          row_dist <- dist(expr_matrix[valid_rows, ])
+          row_hclust <- hclust(row_dist)
+          row_order <- rownames(expr_matrix)[valid_rows][row_hclust$order]
+          # Add back any invalid rows at the end
+          if (sum(!valid_rows) > 0) {
+            row_order <- c(row_order, rownames(expr_matrix)[!valid_rows])
+          }
+        }
+      }, error = function(e) {
+        warning("Row clustering failed: ", e$message)
+      })
+    }
+    
+    if (cluster %in% c("column", "both") || dendrogram %in% c("column", "both")) {
+      tryCatch({
+        # Remove any columns with NA, Inf, or zero variance
+        valid_cols <- apply(expr_matrix, 2, function(x) {
+          !any(is.na(x)) && !any(is.infinite(x)) && var(x, na.rm = TRUE) > 0
+        })
+        
+        if (sum(valid_cols) > 1) {
+          col_dist <- dist(t(expr_matrix[, valid_cols]))
+          col_hclust <- hclust(col_dist)
+          col_order <- colnames(expr_matrix)[valid_cols][col_hclust$order]
+          # Add back any invalid columns at the end
+          if (sum(!valid_cols) > 0) {
+            col_order <- c(col_order, colnames(expr_matrix)[!valid_cols])
+          }
+        }
+      }, error = function(e) {
+        warning("Column clustering failed: ", e$message)
+      })
+    }
+    
+    # Apply scaling
+    if (tolower(scaling) == "row" || tolower(scaling) == "z-score") {
+      expr_matrix <- t(scale(t(expr_matrix)))
+      expr_matrix[is.na(expr_matrix)] <- 0
+      expr_matrix[is.infinite(expr_matrix)] <- 0
+    } else if (tolower(scaling) == "column") {
+      expr_matrix <- scale(expr_matrix)
+      expr_matrix[is.na(expr_matrix)] <- 0
+      expr_matrix[is.infinite(expr_matrix)] <- 0
+    } else if (tolower(scaling) == "log") {
+      expr_matrix <- log2(expr_matrix + 1)
+    }
+    
+    # Reorder matrix based on clustering
+    expr_matrix <- expr_matrix[row_order, col_order]
+    
+    # Melt for ggplot
+    expr_melt <- reshape2::melt(expr_matrix)
+    colnames(expr_melt) <- c("Gene", "Sample", "Expression")
+    
+    # Set factor levels to maintain order
+    expr_melt$Gene <- factor(expr_melt$Gene, levels = row_order)
+    expr_melt$Sample <- factor(expr_melt$Sample, levels = col_order)
+    
+    # Create base heatmap
+    p_heat <- ggplot(expr_melt, aes(x = Sample, y = Gene, fill = Expression)) +
+      geom_tile() +
+      scale_fill_distiller(palette = heatmap_color_scheme, direction = -1, name = "Expression") +
+      labs(title = heatmap_title, x = "", y = "") +
+      theme_minimal() +
+      theme(
+        panel.grid = element_blank(),
+        plot.title = element_text(hjust = 0.5, size = 18, face = "bold"),
+        axis.title.x = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold"),
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 10),
+        axis.text.y = element_text(size = 10),
+        legend.title = element_text(size = 13, face = "bold"),
+        legend.text = element_text(size = 11),
+        legend.position = "right"
+      )
+    
+    # Add color bar annotation 
+    if (!is.null(annotation_df) && !is.null(row_side_palette)) {
+      # Match annotation to ordered samples
+      col_annotation <- annotation_df[match(col_order, annotation_df$sample_id), ]
+      col_annotation <- col_annotation[!is.na(col_annotation$sample_id), ]
+      col_annotation$Sample <- factor(col_annotation$sample_id, levels = col_order)
+      col_annotation$y_pos <- length(row_order) + 0.5
+      
+      # Add annotation bar at top
+      p_heat <- p_heat +
+        geom_tile(data = col_annotation,
+                  aes(x = Sample, y = y_pos, fill = NULL, color = group),
+                  height = 0.3, size = 3, inherit.aes = FALSE, show.legend = TRUE) +
+        scale_color_manual(values = row_side_palette, name = color_by) +
+        guides(
+          fill = guide_colorbar(order = 1, title = "Expression"),
+          color = guide_legend(order = 2, title = color_by)
+        )
+    }
+    
+    # Handle show_names
+    if (show_names == "none") {
+      p_heat <- p_heat + theme(axis.text.x = element_blank(), axis.text.y = element_blank())
+    } else if (show_names == "column" || show_names == "x") {
+      p_heat <- p_heat + theme(axis.text.y = element_blank())
+    } else if (show_names == "row" || show_names == "y") {
+      p_heat <- p_heat + theme(axis.text.x = element_blank())
+    }
+    
+    # Create dendrograms if needed
+    p_row_dend <- NULL
+    p_col_dend <- NULL
+    
+    if (dendrogram %in% c("row", "both") && !is.null(row_hclust)) {
+      library(ggdendro)
+      row_dend_data <- dendro_data(as.dendrogram(row_hclust), type = "rectangle")
+      
+      p_row_dend <- ggplot(segment(row_dend_data)) +
+        geom_segment(aes(x = x, y = y, xend = xend, yend = yend)) +
+        coord_flip() +
+        scale_x_continuous(expand = c(0, 0.5)) +
+        scale_y_reverse(expand = c(0, 0)) +
+        theme_void()
+    }
+    
+    if (dendrogram %in% c("column", "both") && !is.null(col_hclust)) {
+      library(ggdendro)
+      col_dend_data <- dendro_data(as.dendrogram(col_hclust), type = "rectangle")
+      
+      p_col_dend <- ggplot(segment(col_dend_data)) +
+        geom_segment(aes(x = x, y = y, xend = xend, yend = yend)) +
+        scale_x_continuous(expand = c(0, 0.5)) +
+        scale_y_reverse(expand = c(0, 0)) +
+        theme_void()
+    }
+    
+    # Store the legend separately before combining
+    if (!is.null(annotation_df) && !is.null(row_side_palette)) {
+      library(cowplot)
+      
+      # Extract legend
+      legend <- get_legend(p_heat)
+      
+      # Remove legend from main plot for combining
+      p_heat_no_legend <- p_heat + theme(legend.position = "none")
+      
+      # Combine plots with dendrograms
+      if (!is.null(p_row_dend) && !is.null(p_col_dend)) {
+        library(gridExtra)
+        empty <- ggplot() + theme_void()
+        p_combined <- grid.arrange(
+          p_col_dend, empty, empty,
+          p_heat_no_legend, p_row_dend, legend,
+          ncol = 3, nrow = 2,
+          widths = c(4, 0.5, 0.5),
+          heights = c(0.5, 4)
+        )
+      } else if (!is.null(p_row_dend)) {
+        library(gridExtra)
+        p_combined <- grid.arrange(
+          p_heat_no_legend, p_row_dend, legend,
+          ncol = 3,
+          widths = c(4, 0.5, 0.5)
+        )
+      } else if (!is.null(p_col_dend)) {
+        library(gridExtra)
+        empty <- ggplot() + theme_void()
+        p_combined <- grid.arrange(
+          p_col_dend, empty,
+          p_heat_no_legend, legend,
+          ncol = 2, nrow = 2,
+          widths = c(4, 0.5),
+          heights = c(0.5, 4)
+        )
+      } else {
+        p_combined <- p_heat
+      }
+      return(p_combined)
+      
+    } else {
+
+      if (!is.null(p_row_dend) && !is.null(p_col_dend)) {
+        library(gridExtra)
+        empty <- ggplot() + theme_void()
+        p_combined <- grid.arrange(
+          p_col_dend, empty,
+          p_heat, p_row_dend,
+          ncol = 2, nrow = 2,
+          widths = c(4, 0.5),
+          heights = c(0.5, 4)
+        )
+        return(p_combined)
+      } else if (!is.null(p_row_dend)) {
+        library(gridExtra)
+        p_combined <- grid.arrange(
+          p_heat, p_row_dend,
+          ncol = 2,
+          widths = c(4, 0.5)
+        )
+        return(p_combined)
+      } else if (!is.null(p_col_dend)) {
+        library(gridExtra)
+        p_combined <- grid.arrange(
+          p_col_dend,
+          p_heat,
+          nrow = 2,
+          heights = c(0.5, 4)
+        )
+        return(p_combined)
+      } else {
+        return(p_heat)
+      }
+    }
   }
 }
