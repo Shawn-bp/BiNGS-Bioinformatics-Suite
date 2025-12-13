@@ -1,5 +1,6 @@
 
 
+
 require(shiny)
 require(shinythemes)
 require(data.table)
@@ -86,7 +87,7 @@ ui <- fluidPage(
                         choices = NULL,
                         options = list(`actions-box` = TRUE),
                         multiple = FALSE
-                        ),
+                      ),
                       radioButtons("pca_color_palette",
                                    "Select the color palette to use:",
                                    choices = as.list(pca_color_palette_list),
@@ -707,75 +708,126 @@ server <- function(input, output, session) {
                          server = TRUE)
   })
   
-  # Reactive: prepare gene expression matrix on button press
-  gene_expr_matrix_reactive <- eventReactive(input$gene_heatmap_run_button, {
-    req(count_data(), sample_metadata(), input$gene_list_select)
+  # NEW: Add gene annotations reactive (if you have gene annotation data)
+  gene_annotations_reactive <- reactive({
+    # If you have a gene annotations file input
+    if (!is.null(input$gene_annotations_file)) {
+      read.csv(input$gene_annotations_file$datapath)
+    } else if (exists("gene_annotations")) {
+      # Or if you have it pre-loaded as a global variable
+      gene_annotations
+    } else {
+      # Return NULL if no annotations available
+      NULL
+    }
+  })
+  
+  # Reactive: prepare gene list and sample list
+  gene_sample_lists_reactive <- eventReactive(input$gene_heatmap_run_button, {
+    req(count_data(), input$gene_list_select)
     
     # Get selected genes
     gene_list <- input$gene_list_select
     
-    # Get samples to remove (if any selected)
-    samples_remove <- input$samples_to_remove_select
+    # Get sample list (all samples minus removed ones)
+    all_samples <- colnames(count_data())
+    all_samples <- all_samples[!all_samples %in% c("gene_id", "gene_name")]
     
-    prepare_gene_expression_matrix(
-      counts = count_data(),
-      metadata = sample_metadata(),
+    samples_remove <- input$samples_to_remove_select
+    sample_list <- if (!is.null(samples_remove) && length(samples_remove) > 0) {
+      setdiff(all_samples, samples_remove)
+    } else {
+      all_samples
+    }
+    
+    list(
       gene_list = gene_list,
-      remove_samples = samples_remove
+      sample_list = sample_list
     )
   })
   
   # Render static ggplot heatmap
   output$gene_expression_heatmap_ggplot <- renderPlot({
-    req(gene_expr_matrix_reactive())
+    req(gene_sample_lists_reactive())
+    
+    lists <- gene_sample_lists_reactive()
     
     p <- plot_gene_expression_heatmap(
-      expr_matrix = gene_expr_matrix_reactive(),
+      counts = count_data(),
+      gene_list = lists$gene_list,
+      gene_annotations = gene_annotations_reactive(),
+      sample_list = lists$sample_list,
       metadata = sample_metadata(),
       heatmap_title = input$gene_heatmap_title,
       color_by = input$gene_heatmap_color_by,
       sidebar_color_scheme = input$gene_heatmap_sidebar_color_palette,
       heatmap_color_scheme = input$gene_heatmap_color_scheme,
+      xlab = "",
+      ylab = "Genes",
+      column_text_angle = 90,
+      legend_title = "Expression",
+      cex_row = 0.5,
+      cex_col = 0.5,
       scaling = input$gene_heatmap_scaling_type,
       cluster = input$gene_heatmap_clustering_type,
       dendrogram = input$gene_heatmap_dendrogram_list,
       show_names = input$gene_heatmap_show_names,
-      heatmap_type = "ggplot"
+      heatmap_type = "ggheatmap"
     )
     print(p)
   })
   
   # Render interactive heatmaply
   output$gene_expression_heatmap_heatmaply <- renderPlotly({
-    req(gene_expr_matrix_reactive())
+    req(gene_sample_lists_reactive())
+    
+    lists <- gene_sample_lists_reactive()
     
     plot_gene_expression_heatmap(
-      expr_matrix = gene_expr_matrix_reactive(),
+      counts = count_data(),
+      gene_list = lists$gene_list,
+      gene_annotations = gene_annotations_reactive(),
+      sample_list = lists$sample_list,
       metadata = sample_metadata(),
       heatmap_title = input$gene_heatmap_title,
       color_by = input$gene_heatmap_color_by,
       sidebar_color_scheme = input$gene_heatmap_sidebar_color_palette,
       heatmap_color_scheme = input$gene_heatmap_color_scheme,
+      xlab = "",
+      ylab = "Genes",
+      column_text_angle = 90,
+      legend_title = "Expression",
+      cex_row = 0.5,
+      cex_col = 0.5,
       scaling = input$gene_heatmap_scaling_type,
       cluster = input$gene_heatmap_clustering_type,
       dendrogram = input$gene_heatmap_dendrogram_list,
       show_names = input$gene_heatmap_show_names,
-      heatmap_type = input$gene_heatmap_plot_type
+      heatmap_type = "heatmaply"
     )
   })
   
-  # Download gene expression matrix
+  # Download gene expression matrix (updated to use new function)
   output$download_gene_heatmap_data <- downloadHandler(
     filename = function() { 
       paste0("gene_expression_heatmap_", input$gene_heatmap_scaling_type, "_", Sys.Date(), ".csv") 
     },
     content = function(file) {
-      req(gene_expr_matrix_reactive())
-      write.csv(gene_expr_matrix_reactive(), file, row.names = TRUE)
+      req(gene_sample_lists_reactive())
+      
+      lists <- gene_sample_lists_reactive()
+      
+      # Prepare the matrix
+      expr_matrix <- prepare_gene_expression_matrix(
+        counts = count_data(),
+        metadata = sample_metadata(),
+        gene_list = lists$gene_list,
+        remove_samples = input$samples_to_remove_select
+      )
+      
+      write.csv(expr_matrix, file, row.names = TRUE)
     }
   )
   
 }
-
-
 shinyApp(ui = ui, server = server)
