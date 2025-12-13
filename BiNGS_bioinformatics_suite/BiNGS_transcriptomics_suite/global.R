@@ -1,4 +1,5 @@
 
+
 # ------------------ PCA ------------------
 # Run PCA
 run_pca <- function(counts, metadata, scale_data = TRUE, remove_samples = NULL) {
@@ -1044,156 +1045,165 @@ prepare_gene_expression_matrix <- function(counts,
   return(expr_matrix)
 }
 
-plot_gene_expression_heatmap <- function(expr_matrix,
+plot_gene_expression_heatmap <- function(counts,
+                                         gene_list,
+                                         gene_annotations,
+                                         sample_list,
                                          metadata = NULL,
                                          color_by = NULL,
                                          sidebar_color_scheme = "Set1",
                                          heatmap_title = "Gene Expression Heatmap",
                                          heatmap_color_scheme = "RdYlBu",
+                                         xlab = "",
+                                         ylab = "Genes",
+                                         column_text_angle = 90,
+                                         legend_title = "Expression",
+                                         cex_row = 0.5,
+                                         cex_col = 0.5,
                                          cluster = "both",
                                          dendrogram = "both",
                                          scaling = "none",
                                          show_names = "both",
-                                         heatmap_type = "ggplot") {
+                                         heatmap_type = "heatmaply") {
   
-  expr_matrix <- as.matrix(expr_matrix)
-  
-  ann_colors <- NULL
-  side_colors <- NULL
-  
-  if (!is.null(metadata) && !is.null(color_by) && color_by %in% colnames(metadata)) {
-    ann_colors <- metadata[, c("sample_id", color_by), drop = FALSE]
-    rownames(ann_colors) <- ann_colors$sample_id
-    
-    common_samples <- intersect(colnames(expr_matrix), ann_colors$sample_id)
-    if (length(common_samples) > 0) {
-      ann_colors <- ann_colors[common_samples, , drop = FALSE]
-      side_colors <- data.frame(ann_colors[, color_by, drop = FALSE])
-      colnames(side_colors) <- color_by
-      rownames(side_colors) <- ann_colors$sample_id
-    }
-  }
-  
-  if (tolower(heatmap_type) == "ggplot") {
-    # Apply scaling before melting the data
-    if (tolower(scaling) == "row") {
-      expr_matrix <- t(scale(t(expr_matrix)))
-    } else if (tolower(scaling) == "column") {
-      expr_matrix <- scale(expr_matrix)
-    } else if (tolower(scaling) == "log") {
-      expr_matrix <- log2(expr_matrix + 1)
-    }
-    
-    expr_melt <- reshape2::melt(expr_matrix)
-    colnames(expr_melt) <- c("Gene", "Sample", "Expression")
-    
-    p <- ggplot(expr_melt, aes(x = Sample, y = Gene, fill = Expression)) +
-      geom_tile() +
-      scale_fill_distiller(palette = heatmap_color_scheme, direction = -1, name = "Expression") +
-      labs(title = heatmap_title, x = "", y = "") +
-      theme_minimal() +
-      theme(
-        panel.grid = element_blank(),
-        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
-        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 8),
-        axis.text.y = element_text(size = 8),
-        legend.title = element_text(size = 11, face = "bold"),
-        legend.text = element_text(size = 9),
-        legend.position = "right"
-      )
-    
-    if (show_names == "none") {
-      p <- p + theme(axis.text.x = element_blank(), axis.text.y = element_blank())
-    } else if (show_names == "column" || show_names == "x") {
-      p <- p + theme(axis.text.y = element_blank())
-    } else if (show_names == "row" || show_names == "y") {
-      p <- p + theme(axis.text.x = element_blank())
-    }
-    
-    return(p)
-  }
-  
-  else if (tolower(heatmap_type) == "heatmaply") {
-    
-    side_colors <- NULL
-    side_palette <- NULL
-    if (!is.null(metadata) && !is.null(color_by) && color_by %in% colnames(metadata)) {
-      ann_colors <- metadata[, c("sample_id", color_by), drop = FALSE]
-      rownames(ann_colors) <- ann_colors$sample_id
-      
-      common_samples <- intersect(colnames(expr_matrix), ann_colors$sample_id)
-      if (length(common_samples) > 0) {
-        ann_colors <- ann_colors[common_samples, , drop = FALSE]
-        side_colors <- data.frame(ann_colors[, color_by, drop = FALSE])
-        colnames(side_colors) <- color_by
-        rownames(side_colors) <- ann_colors$sample_id
-        
-        # Create named color palette for side colors
-        unique_vals <- unique(side_colors[[color_by]])
-        n_colors <- length(unique_vals)
-        side_palette <- setNames(
-          colorRampPalette(brewer.pal(min(8, max(3, n_colors)), sidebar_color_scheme))(n_colors),
-          unique_vals
-        )
-      }
-    }
-    
-    show_rowv <- cluster %in% c("row", "both")
-    show_colv <- cluster %in% c("column", "both")
-    
-    if (dendrogram == "none") {
-      show_rowv <- FALSE
-      show_colv <- FALSE
-    } else if (dendrogram == "row") {
-      show_rowv <- TRUE
-      show_colv <- FALSE
-    } else if (dendrogram == "column") {
-      show_rowv <- FALSE
-      show_colv <- TRUE
-    } else if (dendrogram == "both") {
-      show_rowv <- TRUE
-      show_colv <- TRUE
-    }
-    
-    if (tolower(scaling) == "row") {
-      expr_matrix <- t(scale(t(expr_matrix)))
-    } else if (tolower(scaling) == "column") {
-      expr_matrix <- scale(expr_matrix)
-    } else if (tolower(scaling) == "log") {
-      expr_matrix <- log2(expr_matrix + 1)
-    }
-    
-    expr_matrix[is.na(expr_matrix)] <- 0
-    expr_matrix[is.infinite(expr_matrix)] <- 0
-    
-    if (show_names == "none") {
-      labRow <- NULL
-      labCol <- NULL
-    } else if (show_names == "column") {
-      labRow <- NULL
-      labCol <- colnames(expr_matrix)
-    } else if (show_names == "row") {
-      labRow <- rownames(expr_matrix)
-      labCol <- NULL
+  # Extract expression data for selected genes and samples
+  if ("gene_id" %in% colnames(counts) || "gene_name" %in% colnames(counts)) {
+    # If counts has gene_id/gene_name columns
+    gene_cols <- intersect(colnames(counts), c("gene_id", "gene_name"))
+    dat <- counts[counts$gene_name %in% gene_list | counts$gene_id %in% gene_list, 
+                  sample_list, drop = FALSE]
+    rownames(dat) <- if("gene_name" %in% colnames(counts)) {
+      counts$gene_name[counts$gene_name %in% gene_list | counts$gene_id %in% gene_list]
     } else {
-      labRow <- rownames(expr_matrix)
-      labCol <- colnames(expr_matrix)
+      counts$gene_id[counts$gene_name %in% gene_list | counts$gene_id %in% gene_list]
     }
+  } else {
+    # If counts is already a matrix with gene names as rownames
+    dat <- counts[rownames(counts) %in% gene_list, sample_list, drop = FALSE]
+  }
+  
+  # Remove genes with zero variance
+  gene_sd <- apply(dat, 1, sd, na.rm = TRUE)
+  dat <- dat[gene_sd != 0, , drop = FALSE]
+  gene_list_filtered <- rownames(dat)
+  
+  # Setup column side colors (sample metadata)
+  col_side_colors <- NULL
+  col_side_palette <- NULL
+  
+  if (!is.null(metadata) && !is.null(color_by) && color_by != "" && color_by %in% colnames(metadata)) {
+    col_side_colors <- metadata[match(sample_list, metadata$sample_id), color_by, drop = FALSE]
+    rownames(col_side_colors) <- sample_list
+    colnames(col_side_colors) <- color_by
     
-    heatmap_colors <- colorRampPalette(rev(brewer.pal(11, heatmap_color_scheme)))(256)
+    # Create named color palette for side colors
+    unique_vals <- unique(col_side_colors[[color_by]])
+    n_colors <- length(unique_vals)
+    col_side_palette <- setNames(
+      colorRampPalette(RColorBrewer::brewer.pal(min(8, max(3, n_colors)), sidebar_color_scheme))(n_colors),
+      unique_vals
+    )
+  }
+  
+  # Create gene annotations for hover text
+  gene_annotation_columns <- c("gene_name", "gene_id", "gene_biotype")
+  available_cols <- intersect(gene_annotation_columns, colnames(gene_annotations))
+  
+  if (!is.null(gene_annotations) && length(available_cols) > 0) {
+    dat_annotation <- gene_annotations[match(gene_list_filtered, gene_annotations$gene_name), 
+                                       available_cols, drop = FALSE]
+    if (nrow(dat_annotation) == 0 || all(is.na(dat_annotation$gene_name))) {
+      # Try matching by gene_id if gene_name didn't work
+      dat_annotation <- gene_annotations[match(gene_list_filtered, gene_annotations$gene_id), 
+                                         available_cols, drop = FALSE]
+    }
+    rownames(dat_annotation) <- gene_list_filtered
     
+    # Create hover text
+    hover_text <- sapply(sample_list, function(sid) {
+      paste0("<b><i>", dat_annotation$gene_name, "</i></b><br>", 
+             "<b>Sample: </b>", sid, "<br>",
+             if("gene_id" %in% colnames(dat_annotation)) paste0("<b>ID: </b>", dat_annotation$gene_id, "<br>") else "",
+             if("gene_biotype" %in% colnames(dat_annotation)) paste0("<b>Biotype: </b>", dat_annotation$gene_biotype, "<br>") else "")
+    })
+    if (length(gene_list_filtered) == 1) {
+      hover_text <- matrix(hover_text, ncol = length(sample_list))
+    }
+  } else {
+    hover_text <- NULL
+  }
+  
+  # Convert dendrogram and cluster settings
+  show_rowv <- cluster %in% c("row", "both")
+  show_colv <- cluster %in% c("column", "both")
+  
+  if (dendrogram == "none") {
+    show_rowv <- FALSE
+    show_colv <- FALSE
+  } else if (dendrogram == "row") {
+    show_rowv <- TRUE
+    show_colv <- FALSE
+  } else if (dendrogram == "column") {
+    show_rowv <- FALSE
+    show_colv <- TRUE
+  } else if (dendrogram == "both") {
+    show_rowv <- TRUE
+    show_colv <- TRUE
+  }
+  
+  # Convert show_names to tick labels
+  if (show_names == "none") {
+    show_tick_labels <- c(FALSE, FALSE)
+  } else if (show_names == "column" || show_names == "x") {
+    show_tick_labels <- c(FALSE, TRUE)
+  } else if (show_names == "row" || show_names == "y") {
+    show_tick_labels <- c(TRUE, FALSE)
+  } else {
+    show_tick_labels <- c(TRUE, TRUE)
+  }
+  
+  # Convert scaling parameter
+  scale_param <- if (tolower(scaling) %in% c("row", "z-score")) "row" 
+  else if (tolower(scaling) == "column") "column" 
+  else if (tolower(scaling) == "log") "none"  # Log handled separately
+  else "none"
+  
+  # Apply log transformation if needed (heatmaply doesn't have built-in log)
+  if (tolower(scaling) == "log") {
+    dat <- log2(dat + 1)
+    scale_param <- "none"
+  }
+  
+  # Select colors
+  if (heatmap_color_scheme == "RdYlBu") {
+    heatmap_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "RdYlBu")))(256)
+  } else {
+    heatmap_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(9, heatmap_color_scheme)))(256)
+  }
+  
+  if (tolower(heatmap_type) == "heatmaply") {
+    # Use heatmaply (plotly interactive)
     hm <- heatmaply::heatmaply(
-      expr_matrix,
+      dat,
       colors = heatmap_colors,
-      Rowv = show_rowv,
-      Colv = show_colv,
-      labRow = labRow,
-      labCol = labCol,
+      xlab = xlab,
+      ylab = ylab,
       main = heatmap_title,
-      col_side_colors = side_colors,
-      col_side_palette = side_palette,
-      showticklabels = c(!is.null(labRow), !is.null(labCol)),
-      colorbar_title = "Expression",
+      custom_hovertext = hover_text,
+      column_text_angle = column_text_angle,
+      key.title = legend_title,
+      cexRow = cex_row,
+      cexCol = cex_col,
+      show_dendrogram = c(show_rowv, show_colv),
+      col_side_colors = col_side_colors,
+      col_side_palette = col_side_palette,
+      plot_method = "plotly",
+      showticklabels = show_tick_labels,
+      colorbar_len = 0.3,
+      side_color_colorbar_len = 0.25,
+      Rowv = ifelse(nrow(dat) == 1, FALSE, show_rowv),
+      Colv = ifelse(ncol(dat) == 1, FALSE, show_colv),
+      scale = scale_param,
       width = 900,
       height = 700
     )
@@ -1212,6 +1222,33 @@ plot_gene_expression_heatmap <- function(expr_matrix,
       )
     )
     
+    hm <- configure_plotly_panel(hm, exportFormat = "svg")
     return(hm)
+    
+  } else if (tolower(heatmap_type) == "ggheatmap" || tolower(heatmap_type) == "ggplot") {
+    # Use ggheatmap (static ggplot)
+    p_heatmap <- heatmaply::ggheatmap(
+      dat,
+      xlab = xlab,
+      ylab = ylab,
+      main = heatmap_title,
+      column_text_angle = column_text_angle,
+      key.title = legend_title,
+      cexRow = cex_row,
+      cexCol = cex_col,
+      show_dendrogram = c(show_rowv, show_colv),
+      col_side_colors = col_side_colors,
+      col_side_palette = col_side_palette,
+      showticklabels = show_tick_labels,
+      colorbar_len = 0.3,
+      side_color_colorbar_len = 0.25,
+      Rowv = ifelse(nrow(dat) == 1, FALSE, show_rowv),
+      Colv = ifelse(ncol(dat) == 1, FALSE, show_colv),
+      scale = scale_param
+    )
+    return(p_heatmap)
+  } else {
+    warning(paste0("Invalid heatmap type: ", heatmap_type))
+    return(NULL)
   }
 }
