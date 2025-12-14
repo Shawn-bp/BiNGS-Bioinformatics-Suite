@@ -315,9 +315,9 @@ ui <- fluidPage(
                                    choices = as.list(dendrogram_list),
                                    selected = dendrogram_list[[1]]),
                       radioButtons("gene_heatmap_show_names",
-                                   "Show gene names:",
-                                   choices = as.list(show_names_list),
-                                   selected = show_names_list[[4]]),
+                                   "Show axis labels:",
+                                   choices = as.list(gene_heatmap_show_names_list),
+                                   selected = gene_heatmap_show_names_list[[4]]),
                       radioButtons("gene_heatmap_plot_type",
                                    "Interactive or static",
                                    choices = as.list(heatmap_type_list),
@@ -375,14 +375,14 @@ server <- function(input, output, session) {
   
   # --- Sync sample removal across all tabs ---
   removed_samples <- reactiveVal(NULL)
-  updating_samples <- reactiveVal(FALSE)
+  updating_samples <- reactiveVal(FALSE)  # Flag to prevent loops
   
   # Update all sample removal dropdowns when data loads
   observeEvent(count_data(), {
     sample_choices <- colnames(count_data())
     sample_choices <- sample_choices[!sample_choices %in% c("gene_id", "gene_name")]
     
-    updating_samples(TRUE)
+    updating_samples(TRUE)  # Set flag before updating
     
     updateSelectizeInput(session, "pca_samples_to_remove", 
                          choices = sample_choices, 
@@ -401,39 +401,72 @@ server <- function(input, output, session) {
                          selected = removed_samples(),
                          server = TRUE)
     
-    updating_samples(FALSE)
+    updating_samples(FALSE)  # Reset flag after updating
   })
   
+  # Debounced version of each input to slow down rapid changes
+  pca_samples_debounced <- reactive({
+    input$pca_samples_to_remove
+  }) %>% debounce(500)  # Wait 500ms after user stops selecting
+  
+  boxplot_samples_debounced <- reactive({
+    input$boxplot_samples_to_remove
+  }) %>% debounce(500)
+  
+  distance_samples_debounced <- reactive({
+    input$sample_distance_samples_to_remove
+  }) %>% debounce(500)
+  
+  heatmap_samples_debounced <- reactive({
+    input$samples_to_remove_select
+  }) %>% debounce(500)
+  
   # Sync PCA removal to all other tabs
-  observeEvent(input$pca_samples_to_remove, {
-    removed_samples(input$pca_samples_to_remove)
-    updateSelectizeInput(session, "boxplot_samples_to_remove", selected = input$pca_samples_to_remove)
-    updateSelectizeInput(session, "sample_distance_samples_to_remove", selected = input$pca_samples_to_remove)
-    updateSelectizeInput(session, "samples_to_remove_select", selected = input$pca_samples_to_remove)
+  observeEvent(pca_samples_debounced(), {
+    if (updating_samples()) return()  # Skip if currently updating
+    
+    updating_samples(TRUE)
+    removed_samples(pca_samples_debounced())
+    updateSelectizeInput(session, "boxplot_samples_to_remove", selected = pca_samples_debounced())
+    updateSelectizeInput(session, "sample_distance_samples_to_remove", selected = pca_samples_debounced())
+    updateSelectizeInput(session, "samples_to_remove_select", selected = pca_samples_debounced())
+    updating_samples(FALSE)
   }, ignoreNULL = FALSE, ignoreInit = TRUE)
   
   # Sync Boxplot removal to all other tabs
-  observeEvent(input$boxplot_samples_to_remove, {
-    removed_samples(input$boxplot_samples_to_remove)
-    updateSelectizeInput(session, "pca_samples_to_remove", selected = input$boxplot_samples_to_remove)
-    updateSelectizeInput(session, "sample_distance_samples_to_remove", selected = input$boxplot_samples_to_remove)
-    updateSelectizeInput(session, "samples_to_remove_select", selected = input$boxplot_samples_to_remove)
+  observeEvent(boxplot_samples_debounced(), {
+    if (updating_samples()) return()
+    
+    updating_samples(TRUE)
+    removed_samples(boxplot_samples_debounced())
+    updateSelectizeInput(session, "pca_samples_to_remove", selected = boxplot_samples_debounced())
+    updateSelectizeInput(session, "sample_distance_samples_to_remove", selected = boxplot_samples_debounced())
+    updateSelectizeInput(session, "samples_to_remove_select", selected = boxplot_samples_debounced())
+    updating_samples(FALSE)
   }, ignoreNULL = FALSE, ignoreInit = TRUE)
   
   # Sync Sample Distance removal to all other tabs
-  observeEvent(input$sample_distance_samples_to_remove, {
-    removed_samples(input$sample_distance_samples_to_remove)
-    updateSelectizeInput(session, "pca_samples_to_remove", selected = input$sample_distance_samples_to_remove)
-    updateSelectizeInput(session, "boxplot_samples_to_remove", selected = input$sample_distance_samples_to_remove)
-    updateSelectizeInput(session, "samples_to_remove_select", selected = input$sample_distance_samples_to_remove)
+  observeEvent(distance_samples_debounced(), {
+    if (updating_samples()) return()
+    
+    updating_samples(TRUE)
+    removed_samples(distance_samples_debounced())
+    updateSelectizeInput(session, "pca_samples_to_remove", selected = distance_samples_debounced())
+    updateSelectizeInput(session, "boxplot_samples_to_remove", selected = distance_samples_debounced())
+    updateSelectizeInput(session, "samples_to_remove_select", selected = distance_samples_debounced())
+    updating_samples(FALSE)
   }, ignoreNULL = FALSE, ignoreInit = TRUE)
   
   # Sync Gene Expression Heatmap removal to all other tabs
-  observeEvent(input$samples_to_remove_select, {
-    removed_samples(input$samples_to_remove_select)
-    updateSelectizeInput(session, "pca_samples_to_remove", selected = input$samples_to_remove_select)
-    updateSelectizeInput(session, "boxplot_samples_to_remove", selected = input$samples_to_remove_select)
-    updateSelectizeInput(session, "sample_distance_samples_to_remove", selected = input$samples_to_remove_select)
+  observeEvent(heatmap_samples_debounced(), {
+    if (updating_samples()) return()
+    
+    updating_samples(TRUE)
+    removed_samples(heatmap_samples_debounced())
+    updateSelectizeInput(session, "pca_samples_to_remove", selected = heatmap_samples_debounced())
+    updateSelectizeInput(session, "boxplot_samples_to_remove", selected = heatmap_samples_debounced())
+    updateSelectizeInput(session, "sample_distance_samples_to_remove", selected = heatmap_samples_debounced())
+    updating_samples(FALSE)
   }, ignoreNULL = FALSE, ignoreInit = TRUE)
   
   # ---------------- PCA ----------------
