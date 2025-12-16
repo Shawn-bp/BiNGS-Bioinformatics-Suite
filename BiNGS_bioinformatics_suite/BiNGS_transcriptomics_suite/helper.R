@@ -1,4 +1,5 @@
 
+
 #------------------- PCA specific variables ------------------- 
 pca_color_palette_list = c(
   "Set1 (Bright reds/blues)" = "Set1",
@@ -63,6 +64,8 @@ scaling_list = c("None" = "none", "Row" = "row", "Column" = "column", "Log scale
 dendrogram_list = c("None" = "none", "Row" = "row", "Column" = "column", "Both" = "both")
 
 show_names_list = c("None" = "none", "Row" = "row", "Column" = "column", "Both" = "both")
+
+gene_heatmap_show_names_list = c("None" = "none", "Gene Names" = "row", "Sample IDs" = "column", "Both" = "both")
 
 heatmap_type_list = c("Interactive" = "heatmaply", "Static" = "ggplot")
 
