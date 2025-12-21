@@ -1,8 +1,6 @@
-
-
 # ------------------ PCA ------------------
 # Run PCA
-run_pca <- function(counts, metadata, scale_data = TRUE, remove_samples = NULL) {
+run_pca <- function(counts, metadata, ntop = 500, remove_samples = NULL) {
   
   # Remove specified samples
   if (!is.null(remove_samples) && length(remove_samples) > 0) {
@@ -13,10 +11,21 @@ run_pca <- function(counts, metadata, scale_data = TRUE, remove_samples = NULL) 
   }
   
   expr <- counts[, !(colnames(counts) %in% c("gene_id", "gene_name"))]
-  expr_t <- t(expr)
-  expr_t <- expr_t[, apply(expr_t, 2, var) > 0, drop = FALSE]
   
-  pca_res <- prcomp(expr_t, scale. = scale_data)
+  # Convert to matrix if needed for proper variance calculation
+  expr <- as.matrix(expr)
+  
+  # Calculate variance for each gene (across samples) - matching Document 1's rowVars
+  rv <- matrixStats::rowVars(expr)
+  
+  # Select the ntop genes by variance
+  select <- order(rv, decreasing = TRUE)[seq_len(min(ntop, length(rv)))]
+  
+  # Transpose and use only selected genes
+  expr_t <- t(expr[select, ])
+  
+  # Perform PCA without scaling (to match Document 1)
+  pca_res <- prcomp(expr_t, scale. = FALSE)
   
   var_explained <- (pca_res$sdev^2) / sum(pca_res$sdev^2) * 100
   
