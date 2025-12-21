@@ -2,44 +2,51 @@
 # Run PCA
 run_pca <- function(counts, metadata, ntop = 500, remove_samples = NULL) {
   
+  # Extract expression matrix (remove gene_id/gene_name columns)
+  gene_cols <- intersect(colnames(counts), c("gene_id", "gene_name"))
+  
+  # Get sample columns only
+  sample_cols <- setdiff(colnames(counts), gene_cols)
+  
   # Remove specified samples
   if (!is.null(remove_samples) && length(remove_samples) > 0) {
-    keep_cols <- setdiff(colnames(counts), c("gene_id", "gene_name", remove_samples))
-    gene_cols <- intersect(colnames(counts), c("gene_id", "gene_name"))
-    counts <- counts[, c(gene_cols, keep_cols), drop = FALSE]
-    metadata <- metadata[metadata$sample_id %in% keep_cols, ]
+    sample_cols <- setdiff(sample_cols, remove_samples)
+    metadata <- metadata[metadata$sample_id %in% sample_cols, ]
   }
   
-  expr <- counts[, !(colnames(counts) %in% c("gene_id", "gene_name"))]
+  # Create matrix with ONLY sample columns 
+  expr_matrix <- as.matrix(counts[, sample_cols, drop = FALSE])
   
-  # Convert to matrix if needed for proper variance calculation
-  expr <- as.matrix(expr)
+  # Set rownames if gene_id exists
+  if ("gene_id" %in% colnames(counts)) {
+    rownames(expr_matrix) <- counts$gene_id
+  }
   
-  # Calculate variance for each gene (across samples) - matching Document 1's rowVars
-  rv <- matrixStats::rowVars(expr)
+  # Calculate the variance for each gene  
+  rv <- matrixStats::rowVars(expr_matrix)
   
-  # Select the ntop genes by variance
+  # Select the ntop genes by variance  
   select <- order(rv, decreasing = TRUE)[seq_len(min(ntop, length(rv)))]
   
-  # Transpose and use only selected genes
-  expr_t <- t(expr[select, ])
+  # Perform PCA on transposed data for selected genes  
+  pca <- prcomp(t(expr_matrix[select, ]))
   
-  # Perform PCA without scaling (to match Document 1)
-  pca_res <- prcomp(expr_t, scale. = FALSE)
+  # Calculate variance explained 
+  percentVar <- pca$sdev^2 / sum(pca$sdev^2)
   
-  var_explained <- (pca_res$sdev^2) / sum(pca_res$sdev^2) * 100
-  
-  pca_coords <- as.data.frame(pca_res$x)
+  # Create coordinates data frame
+  pca_coords <- as.data.frame(pca$x)
   pca_coords$sample_id <- rownames(pca_coords)
   
+  # Join with metadata
   if (!is.null(metadata)) {
     pca_coords <- dplyr::left_join(pca_coords, metadata, by = "sample_id")
   }
   
   return(list(
-    pca = pca_res,
+    pca = pca,
     coords = pca_coords,
-    variance = var_explained
+    variance = percentVar * 100  # Convert to percentage
   ))
 }
 
@@ -136,7 +143,6 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL, shape_v
     return(p)
   }
 }
-
 # ------------------ BOXPLOT ------------------
 get_factor_comparisons = function(condition = c(), 
                                   reference_group = NULL) {
