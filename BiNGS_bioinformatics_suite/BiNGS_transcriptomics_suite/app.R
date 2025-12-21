@@ -469,7 +469,7 @@ server <- function(input, output, session) {
   # ---------------- PCA ----------------
   pca_res <- reactive({
     req(count_data(), sample_metadata())
-    run_pca(count_data(), sample_metadata(), remove_samples = input$pca_samples_to_remove)
+    run_pca(count_data(), sample_metadata(), ntop = 500, remove_samples = input$pca_samples_to_remove)
   })
   
   observeEvent(pca_res(), {
