@@ -14,7 +14,7 @@ run_pca <- function(counts, metadata, ntop = 500, remove_samples = NULL) {
     metadata <- metadata[metadata$sample_id %in% sample_cols, ]
   }
   
-  # Create matrix with ONLY sample columns 
+  # Create matrix with sample columns
   expr_matrix <- as.matrix(counts[, sample_cols, drop = FALSE])
   
   # Set rownames if gene_id exists
@@ -22,16 +22,33 @@ run_pca <- function(counts, metadata, ntop = 500, remove_samples = NULL) {
     rownames(expr_matrix) <- counts$gene_id
   }
   
-  # Calculate the variance for each gene  
+  # Apply VST transformation
+  coldata_minimal <- data.frame(
+    row.names = colnames(expr_matrix),
+    condition = rep("sample", ncol(expr_matrix))
+  )
+  
+  # Create DESeqDataSet
+  dds <- DESeq2::DESeqDataSetFromMatrix(
+    countData = round(expr_matrix),  
+    colData = coldata_minimal,
+    design = ~ 1  
+  )
+  
+  # Apply VST
+  vst_data <- DESeq2::vst(dds, blind = TRUE)
+  expr_matrix <- SummarizedExperiment::assay(vst_data)
+  
+  # Calculate the variance for each gene
   rv <- matrixStats::rowVars(expr_matrix)
   
-  # Select the ntop genes by variance  
+  # Select the ntop genes by variance
   select <- order(rv, decreasing = TRUE)[seq_len(min(ntop, length(rv)))]
   
-  # Perform PCA on transposed data for selected genes  
+  # Perform PCA on transposed data for selected genes
   pca <- prcomp(t(expr_matrix[select, ]))
   
-  # Calculate variance explained 
+  # Calculate variance explained
   percentVar <- pca$sdev^2 / sum(pca$sdev^2)
   
   # Create coordinates data frame
@@ -71,8 +88,8 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL, shape_v
         plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
         legend.title = element_text(size = 12, face = "bold"),
         legend.text = element_text(size = 10),
-        axis.title.x = element_text(size = 40, face = "bold"),
-        axis.title.y = element_text(size = 40, face = "bold"),
+        axis.title.x = element_text(size = 15, face = "bold"),
+        axis.title.y = element_text(size = 15, face = "bold"),
         legend.position = "right",
         legend.background = element_rect(fill = "white", color = "gray80"),
         legend.key = element_rect(fill = "white"),
