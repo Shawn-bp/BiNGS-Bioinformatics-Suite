@@ -1,3 +1,13 @@
+# Install BiocManager
+if (!require("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+
+# Install DESeq2
+BiocManager::install("DESeq2")
+
+# Install SummarizedExperiment
+BiocManager::install("SummarizedExperiment")
+
 require(shiny)
 require(shinythemes)
 require(data.table)
@@ -10,6 +20,8 @@ require(ggpubr)
 require(matrixStats)
 require(heatmaply)
 library(RColorBrewer)
+library(DESeq2)
+library(SummarizedExperiment)
 source("helper.R")
 source("global.R")
 
