@@ -865,7 +865,7 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
 ## ------------------ SAMPLE DISTANCE HEATMAP ------------------
 
 # Calculate distance matrix (used by reactive)
-run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, scale_type = "none", ntop = NULL) {
+run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, scale_type = "none", ntop = 500) {
   
   expr <- counts[, !(colnames(counts) %in% c("gene_id", "gene_name"))]
   
@@ -889,8 +889,31 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
     expr <- scale(expr)
   } else if (scale_type == "log") {
     expr <- log10(expr + 1)
+  } else if (scale_type == "vst") {
+    # Create minimal colData
+    coldata_minimal <- data.frame(
+      row.names = colnames(expr),
+      condition = rep("sample", ncol(expr))
+    )
+    
+    # Create DESeqDataSet
+    dds <- DESeq2::DESeqDataSetFromMatrix(
+      countData = round(expr),
+      colData = coldata_minimal,
+      design = ~ 1
+    )
+    
+    # Apply VST
+    if (ncol(expr) < 30) {
+      vst_data <- DESeq2::varianceStabilizingTransformation(dds, blind = TRUE)
+    } else {
+      vst_data <- DESeq2::vst(dds, blind = TRUE)
+    }
+    
+    expr <- SummarizedExperiment::assay(vst_data)
   }
   
+  # Calculate distance matrix from expression values
   dist_matrix <- dist(t(expr), method = "euclidean")
   dist_matrix <- as.matrix(dist_matrix)
   
@@ -899,6 +922,7 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
   
   return(dist_matrix)
 }
+
 
 plot_sample_distance_heatmap <- function(dist_matrix, 
                                          metadata = NULL,
