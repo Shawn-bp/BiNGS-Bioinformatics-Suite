@@ -59,7 +59,7 @@ fact_var = "condition"
 
 
 #------------------- Heatmap specific variables ------------------- 
-scaling_list = c("None" = "none", "Row" = "row", "Column" = "column", "Log scale" = "log")
+scaling_list = c("None" = "none", "Row" = "row", "Column" = "column", "Log scale" = "log", "Normalized(vst)" = "vst")
 
 dendrogram_list = c("None" = "none", "Row" = "row", "Column" = "column", "Both" = "both")
 
@@ -73,5 +73,7 @@ heatmap_type_list = c("Interactive" = "heatmaply", "Static" = "ggplot")
 heatmap_color_scheme_list = c(
   "Red-White-Blue" = "RdBu",
   "Red-Yellow-Blue" = "RdYlBu",
-  "Spectral" = "Spectral"
+  "Spectral" = "Spectral",
+  "Yellow-Blue-Purple" = "viridis"
 )
+
