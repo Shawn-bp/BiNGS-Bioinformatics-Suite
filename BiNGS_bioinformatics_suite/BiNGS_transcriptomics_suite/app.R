@@ -260,11 +260,11 @@ ui <- fluidPage(
                       br(),
                       conditionalPanel(
                         "input.Sample_Distance_Heatmap_Plot_type == 'ggplot'",
-                        plotOutput("sample_distance_heatmap", height = "700px")
+                        plotOutput("sample_distance_heatmap", height = "700px", width = "1000px")
                       ),
                       conditionalPanel(
                         "input.Sample_Distance_Heatmap_Plot_type == 'heatmaply'",
-                        plotlyOutput("sample_distance_heatmaply", height = "700px")
+                        plotlyOutput("sample_distance_heatmaply", height = "700px", width = "1000px")
                       ))
              )
     ),
