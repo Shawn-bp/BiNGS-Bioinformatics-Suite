@@ -904,21 +904,13 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
     )
     
     # Create DESeqDataSet
-    dds <- DESeq2::DESeqDataSetFromMatrix(
-      countData = round(expr_matrix),
-      colData = coldata_minimal,
-      design = ~ 1
-    )
+    dds = DESeqDataSetFromMatrix(countData = round(expr_matrix),
+                                 colData = coldata_minimal,
+                                 design = ~ 1)
     
     # Apply VST
-    if (ncol(expr_matrix) < 30) {
-      vst_data <- DESeq2::varianceStabilizingTransformation(dds, blind = TRUE)
-    } else {
-      vst_data <- DESeq2::vst(dds, blind = TRUE)
-    }
-    
-    expr_matrix <- SummarizedExperiment::assay(vst_data)
-  }
+    vsd = vst(dds, blind = TRUE)
+    expr_matrix = as.data.frame(assay(vsd), stringAsFactors = FALSE)
   
   # Calculate variance for each gene and select top ntop genes
   rv <- rowVars(as.matrix(expr_matrix))
@@ -939,8 +931,8 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
   colnames(sampleDistMatrix2) <- stringr::str_to_title(gsub("_", " ", rownames(sampleDistMatrix)))
   
   return(sampleDistMatrix2)
+  }
 }
-
 
 plot_sample_distance_heatmap <- function(dist_matrix, 
                                          metadata = NULL,
