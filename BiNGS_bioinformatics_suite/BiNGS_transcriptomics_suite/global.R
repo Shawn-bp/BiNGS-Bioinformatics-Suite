@@ -864,63 +864,81 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
 
 ## ------------------ SAMPLE DISTANCE HEATMAP ------------------
 
-# Calculate distance matrix (used by reactive)
+# Calculate distance matrix
 run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, scale_type = "none", ntop = 500) {
   
-  expr <- counts[, !(colnames(counts) %in% c("gene_id", "gene_name"))]
+  # Extract expression matrix (remove gene_id/gene_name columns)
+  gene_cols <- intersect(colnames(counts), c("gene_id", "gene_name"))
   
-  if (!is.null(remove_samples)) {
-    expr <- expr[, !(colnames(expr) %in% remove_samples), drop = FALSE]
+  # Get sample columns only
+  sample_cols <- setdiff(colnames(counts), gene_cols)
+  
+  # Remove specified samples
+  if (!is.null(remove_samples) && length(remove_samples) > 0) {
+    sample_cols <- setdiff(sample_cols, remove_samples)
+    if (!is.null(metadata)) {
+      metadata <- metadata[metadata$sample_id %in% sample_cols, ]
+    }
   }
   
-  expr <- expr[apply(expr, 1, var) > 0, , drop = FALSE]
+  # Create matrix with sample columns
+  expr_matrix <- as.matrix(counts[, sample_cols, drop = FALSE])
   
-  # Select top variable genes if specified
-  if (!is.null(ntop) && ntop < nrow(expr)) {
-    gene_vars <- apply(expr, 1, var)
-    select <- order(gene_vars, decreasing = TRUE)[1:min(ntop, nrow(expr))]
-    expr <- expr[select, , drop = FALSE]
+  # Set rownames if gene_id exists
+  if ("gene_id" %in% colnames(counts)) {
+    rownames(expr_matrix) <- counts$gene_id
   }
   
-  # Apply scaling
+  # Apply scaling/transformation to the selected genes
   if (scale_type == "row") {
-    expr <- t(scale(t(expr)))
+    expr_matrix <- t(scale(t(expr_matrix)))
   } else if (scale_type == "column") {
-    expr <- scale(expr)
+    expr_matrix <- scale(expr_matrix)
   } else if (scale_type == "log") {
-    expr <- log10(expr + 1)
+    expr_matrix <- log10(expr_matrix + 1)
   } else if (scale_type == "vst") {
     # Create minimal colData
     coldata_minimal <- data.frame(
-      row.names = colnames(expr),
-      condition = rep("sample", ncol(expr))
+      row.names = colnames(expr_matrix),
+      condition = rep("sample", ncol(expr_matrix))
     )
     
     # Create DESeqDataSet
     dds <- DESeq2::DESeqDataSetFromMatrix(
-      countData = round(expr),
+      countData = round(expr_matrix),
       colData = coldata_minimal,
       design = ~ 1
     )
     
     # Apply VST
-    if (ncol(expr) < 30) {
+    if (ncol(expr_matrix) < 30) {
       vst_data <- DESeq2::varianceStabilizingTransformation(dds, blind = TRUE)
     } else {
       vst_data <- DESeq2::vst(dds, blind = TRUE)
     }
     
-    expr <- SummarizedExperiment::assay(vst_data)
+    expr_matrix <- SummarizedExperiment::assay(vst_data)
   }
   
-  # Calculate distance matrix from expression values
-  dist_matrix <- dist(t(expr), method = "euclidean")
-  dist_matrix <- as.matrix(dist_matrix)
+  # Calculate variance for each gene and select top ntop genes
+  rv <- rowVars(as.matrix(expr_matrix))
   
-  rownames(dist_matrix) <- colnames(expr)
-  colnames(dist_matrix) <- colnames(expr)
+  # Select the ntop genes by variance
+  select <- order(rv, decreasing = TRUE)[seq_len(min(ntop, length(rv)))]
   
-  return(dist_matrix)
+  # Calculate distance matrix using selected genes (THIS IS THE KEY - same as pipeline)
+  sample_set <- colnames(expr_matrix)
+  sampleDists <- dist(t(as.matrix(expr_matrix[select, ])))
+  sampleDistMatrix <- as.matrix(sampleDists)
+  rownames(sampleDistMatrix) <- sample_set
+  colnames(sampleDistMatrix) <- NULL
+  
+  # Create formatted distance matrix (both rows and columns formatted)
+  sampleDistMatrix2 <- as.data.frame(sampleDistMatrix)
+  rownames(sampleDistMatrix2) <- stringr::str_to_title(gsub("_", " ", rownames(sampleDistMatrix)))
+  colnames(sampleDistMatrix2) <- stringr::str_to_title(gsub("_", " ", rownames(sampleDistMatrix)))
+  
+  return(sampleDistMatrix2)
 }
 
 
@@ -933,6 +951,9 @@ plot_sample_distance_heatmap <- function(dist_matrix,
                                          xlab = "",
                                          ylab = "",
                                          column_text_angle = 45,
+                                         legend_title = "Euclidean\nsample\ndistance",
+                                         cex_row = 1,
+                                         cex_col = 1,
                                          show_dendrogram = c(TRUE, TRUE),
                                          plot_type = "heatmaply",
                                          colorbar_xpos = 1.02,
@@ -940,34 +961,48 @@ plot_sample_distance_heatmap <- function(dist_matrix,
                                          show_tick_labels = c(TRUE, TRUE),
                                          colorbar_len = 0.4) {
   
-  # Use the pre-calculated distance matrix
+  # dist_matrix is already a data frame from run_sample_distance()
   sampleDistMatrix <- dist_matrix
-  
-  # Get sample names from the matrix
-  sample_names <- rownames(sampleDistMatrix)
   
   # Prepare side colors if metadata and color_by are provided
   row_side_colors <- NULL
   row_side_palette <- NULL
   
   if (!is.null(metadata) && !is.null(color_by) && color_by %in% colnames(metadata)) {
+    # Get original sample names (before formatting) - convert back from formatted names
+    formatted_names <- rownames(sampleDistMatrix)
+    original_names <- tolower(gsub(" ", "_", formatted_names))
+    
     ann_colors <- metadata[, c("sample_id", color_by), drop = FALSE]
     rownames(ann_colors) <- ann_colors$sample_id
     
-    common_samples <- intersect(sample_names, ann_colors$sample_id)
+    # Match original names to metadata
+    common_samples <- intersect(original_names, ann_colors$sample_id)
     if (length(common_samples) > 0) {
-      ann_colors <- ann_colors[common_samples, , drop = FALSE]
-      row_side_colors <- data.frame(ann_colors[, color_by, drop = FALSE])
-      colnames(row_side_colors) <- color_by
-      rownames(row_side_colors) <- ann_colors$sample_id
+      # Create a mapping to maintain order
+      sample_order <- match(original_names, common_samples)
+      sample_order <- sample_order[!is.na(sample_order)]
+      
+      # Reorder to match distance matrix order
+      ann_colors_ordered <- ann_colors[common_samples[sample_order], , drop = FALSE]
+      row_side_colors <- data.frame(ann_colors_ordered[, color_by, drop = FALSE])
+      colnames(row_side_colors) <- stringr::str_to_title(gsub("_", " ", color_by))
+      
+      # Use formatted names for display (should match dist_matrix rownames)
+      rownames(row_side_colors) <- formatted_names[original_names %in% common_samples]
       
       # Create named color palette for side colors
-      unique_vals <- unique(row_side_colors[[color_by]])
+      unique_vals <- unique(row_side_colors[[stringr::str_to_title(gsub("_", " ", color_by))]])
       n_colors <- length(unique_vals)
-      row_side_palette <- setNames(
-        colorRampPalette(RColorBrewer::brewer.pal(min(8, max(3, n_colors)), sidebar_color_scheme))(n_colors),
-        unique_vals
-      )
+      
+      # Generate colors
+      if (n_colors <= 8) {
+        base_colors <- RColorBrewer::brewer.pal(max(3, n_colors), sidebar_color_scheme)
+      } else {
+        base_colors <- colorRampPalette(RColorBrewer::brewer.pal(8, sidebar_color_scheme))(n_colors)
+      }
+      
+      row_side_palette <- setNames(base_colors[1:n_colors], unique_vals)
     }
   }
   
@@ -994,7 +1029,11 @@ plot_sample_distance_heatmap <- function(dist_matrix,
       selected_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "RdYlBu")))(256)
     } else {
       # Try as RColorBrewer palette
-      selected_colors <- colorRampPalette(RColorBrewer::brewer.pal(9, heatmap_color_scheme))(256)
+      tryCatch({
+        selected_colors <- colorRampPalette(RColorBrewer::brewer.pal(9, heatmap_color_scheme))(256)
+      }, error = function(e) {
+        selected_colors <- viridis::viridis(n = 256, alpha = 1, begin = 0, end = 1)
+      })
     }
   } else {
     selected_colors <- heatmap_color_scheme
@@ -1009,7 +1048,9 @@ plot_sample_distance_heatmap <- function(dist_matrix,
       ylab = ylab,
       main = heatmap_title,
       column_text_angle = column_text_angle,
-      key.title = "Distance",
+      key.title = legend_title,
+      cexRow = cex_row,
+      cexCol = cex_col,
       Rowv = show_dendrogram[1],
       Colv = show_dendrogram[2],
       row_side_colors = row_side_colors,
@@ -1018,9 +1059,7 @@ plot_sample_distance_heatmap <- function(dist_matrix,
       colorbar_xpos = colorbar_xpos,
       colorbar_ypos = colorbar_ypos,
       showticklabels = show_tick_labels,
-      colorbar_len = colorbar_len,
-      width = 900,
-      height = 700
+      colorbar_len = colorbar_len
     )
     
     # Enhance layout
@@ -1039,40 +1078,87 @@ plot_sample_distance_heatmap <- function(dist_matrix,
       )
     )
     
-    p <- configure_plotly_panel(p, exportFormat = "svg")
+    if (exists("configure_plotly_panel")) {
+      p <- configure_plotly_panel(p, exportFormat = "svg")
+    }
     return(p)
     
   } else if (tolower(plot_type) == "ggplot") {
-    # Create ggplot version
-    dist_melt <- reshape2::melt(sampleDistMatrix)
+    # For ggplot, we need to apply hierarchical clustering manually
+    
+    # Perform hierarchical clustering if dendrograms are requested
+    hc_row <- NULL
+    hc_col <- NULL
+    
+    if (show_dendrogram[1] || show_dendrogram[2]) {
+      # Convert to matrix for clustering
+      dist_mat <- as.matrix(sampleDistMatrix)
+      
+      if (show_dendrogram[1]) {
+        hc_row <- hclust(as.dist(dist_mat))
+      }
+      if (show_dendrogram[2]) {
+        hc_col <- hclust(as.dist(t(dist_mat)))
+      }
+    }
+    
+    # Melt the distance matrix for ggplot
+    dist_melt <- reshape2::melt(as.matrix(sampleDistMatrix))
     colnames(dist_melt) <- c("Sample1", "Sample2", "Distance")
     
-    p <- ggplot(dist_melt, aes(x = Sample2, y = Sample1, fill = Distance)) +
-      geom_tile() +
-      scale_fill_gradientn(colors = selected_colors, name = "Distance") +
-      labs(title = heatmap_title, x = xlab, y = ylab) +
-      theme_minimal() +
-      theme(
-        panel.grid = element_blank(),
-        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
-        axis.text.x = element_text(angle = column_text_angle, hjust = 1, vjust = 0.5, size = 8),
-        axis.text.y = element_text(size = 8),
-        legend.title = element_text(size = 11, face = "bold"),
-        legend.text = element_text(size = 9),
-        legend.position = "right"
+    # Reorder based on clustering if dendrograms are shown
+    if (!is.null(hc_row)) {
+      dist_melt$Sample1 <- factor(dist_melt$Sample1, 
+                                  levels = rownames(sampleDistMatrix)[hc_row$order])
+    } else {
+      dist_melt$Sample1 <- factor(dist_melt$Sample1, 
+                                  levels = rownames(sampleDistMatrix))
+    }
+    
+    if (!is.null(hc_col)) {
+      dist_melt$Sample2 <- factor(dist_melt$Sample2, 
+                                  levels = colnames(sampleDistMatrix)[hc_col$order])
+    } else {
+      dist_melt$Sample2 <- factor(dist_melt$Sample2, 
+                                  levels = colnames(sampleDistMatrix))
+    }
+    
+    # Create the ggplot
+    p <- ggplot2::ggplot(dist_melt, ggplot2::aes(x = Sample2, y = Sample1, fill = Distance)) +
+      ggplot2::geom_tile(color = "white", linewidth = 0.5) +
+      ggplot2::scale_fill_gradientn(colors = selected_colors, name = legend_title) +
+      ggplot2::labs(title = heatmap_title, x = xlab, y = ylab) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        panel.grid = ggplot2::element_blank(),
+        plot.title = ggplot2::element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.text.x = ggplot2::element_text(
+          angle = column_text_angle, 
+          hjust = 1, 
+          vjust = 0.5, 
+          size = 10
+        ),
+        axis.text.y = ggplot2::element_text(size = 10),
+        legend.title = ggplot2::element_text(size = 11, face = "bold"),
+        legend.text = ggplot2::element_text(size = 9),
+        legend.position = "right",
+        axis.title.x = ggplot2::element_text(size = 12, face = "bold"),
+        axis.title.y = ggplot2::element_text(size = 12, face = "bold")
       )
     
+    # Handle tick label visibility
     if (!show_tick_labels[1]) {
-      p <- p + theme(axis.text.y = element_blank())
+      p <- p + ggplot2::theme(axis.text.y = ggplot2::element_blank(),
+                              axis.ticks.y = ggplot2::element_blank())
     }
     if (!show_tick_labels[2]) {
-      p <- p + theme(axis.text.x = element_blank())
+      p <- p + ggplot2::theme(axis.text.x = ggplot2::element_blank(),
+                              axis.ticks.x = ggplot2::element_blank())
     }
     
     return(p)
   }
 }
-
 
 # ------------------ GENE EXPRESSION HEATMAP ------------------
 
