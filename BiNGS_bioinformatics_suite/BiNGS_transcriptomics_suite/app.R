@@ -239,7 +239,7 @@ ui <- fluidPage(
                       radioButtons("sample_distance_heatmap_scaling_type",
                                    "Select the type of scaling to perform:",
                                    choices = as.list(scaling_list),
-                                   selected = scaling_list[[2]]),
+                                   selected = scaling_list[[5]]),
                       radioButtons("sample_distance_heatmap_dendrogram_list",
                                    "Select the type of clustering to perform:",
                                    choices = as.list(dendrogram_list),
@@ -646,7 +646,7 @@ server <- function(input, output, session) {
   dist_matrix_reactive <- eventReactive(input$sample_distance_run_button, {
     req(count_data(), sample_metadata())
     
-    samples_remove <- input$sample_distance_samples_to_remove
+    samples_remove <- input$sample_distance_samples_to_removeYOUR 
     
     # produce full dist matrix 
     run_sample_distance(
