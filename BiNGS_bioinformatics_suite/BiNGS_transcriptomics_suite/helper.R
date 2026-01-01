@@ -1,5 +1,3 @@
-
-
 #------------------- PCA specific variables ------------------- 
 pca_color_palette_list = c(
   "Set1 (Bright reds/blues)" = "Set1",
@@ -15,6 +13,7 @@ pca_color_palette_list = c(
 pca_metadata_columns_to_remove = c("species", "strandedness", "alignment_bam", "fastq_1", "fastq_2", "fastq_1_trimmed", "fastq_2_trimmed", "bings_sample_id", "bings_case_id", "bings_patient_id","file_name", "bings_block_id")
 
 #------------------- General variables ------------------- 
+
 color_palette_list = c(
   "Dark2", 
   "Set1",
@@ -59,7 +58,9 @@ fact_var = "condition"
 
 
 #------------------- Heatmap specific variables ------------------- 
-scaling_list = c("None" = "none", "Row" = "row", "Column" = "column", "Log scale" = "log", "Normalized(vst)" = "vst")
+sample_distance_scaling_list = c("None" = "none", "Row" = "row", "Column" = "column", "Log scale" = "log", "Normalized(vst)" = "vst")
+
+gene_expression_scaling_list = c("None" = "none", "Row" = "row", "Column" = "column", "Log scale" = "log")
 
 dendrogram_list = c("None" = "none", "Row" = "row", "Column" = "column", "Both" = "both")
 
@@ -69,11 +70,9 @@ gene_heatmap_show_names_list = c("None" = "none", "Gene Names" = "row", "Sample 
 
 heatmap_type_list = c("Interactive" = "heatmaply", "Static" = "ggplot")
 
-# Gene expression heatmap specific color schemes for the heatmaps
 heatmap_color_scheme_list = c(
   "Red-White-Blue" = "RdBu",
   "Red-Yellow-Blue" = "RdYlBu",
   "Spectral" = "Spectral",
   "Yellow-Blue-Purple" = "viridis"
 )
-
