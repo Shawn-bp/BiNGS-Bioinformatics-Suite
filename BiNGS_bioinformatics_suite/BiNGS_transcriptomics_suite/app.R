@@ -238,8 +238,8 @@ ui <- fluidPage(
                                    selected = heatmap_color_scheme_list[[1]]),
                       radioButtons("sample_distance_heatmap_scaling_type",
                                    "Select the type of scaling to perform:",
-                                   choices = as.list(scaling_list),
-                                   selected = scaling_list[[5]]),
+                                   choices = as.list(sample_distance_scaling_list),
+                                   selected = sample_distance_scaling_list[[5]]),
                       radioButtons("sample_distance_heatmap_dendrogram_list",
                                    "Select the type of clustering to perform:",
                                    choices = as.list(dendrogram_list),
@@ -318,8 +318,8 @@ ui <- fluidPage(
                                    selected = heatmap_color_scheme_list[[1]]),
                       radioButtons("gene_heatmap_scaling_type",
                                    "Select the type of scaling to perform:",
-                                   choices = as.list(scaling_list),
-                                   selected = scaling_list[[2]]),
+                                   choices = as.list(gene_expression_scaling_list),
+                                   selected = gene_expression_scaling_list[[2]]),
                       radioButtons("gene_heatmap_dendrogram_list",
                                    "Select the type of clustering to perform:",
                                    choices = as.list(dendrogram_list),
@@ -646,7 +646,7 @@ server <- function(input, output, session) {
   dist_matrix_reactive <- eventReactive(input$sample_distance_run_button, {
     req(count_data(), sample_metadata())
     
-    samples_remove <- input$sample_distance_samples_to_removeYOUR 
+    samples_remove <- input$sample_distance_samples_to_remove
     
     # produce full dist matrix 
     run_sample_distance(
@@ -808,19 +808,18 @@ server <- function(input, output, session) {
       color_by = input$gene_heatmap_color_by,
       sidebar_color_scheme = input$gene_heatmap_sidebar_color_palette,
       heatmap_color_scheme = input$gene_heatmap_color_scheme,
-      xlab = "",
+      xlab = "Samples",
       ylab = "Genes",
       column_text_angle = 90,
       legend_title = "Expression",
-      cex_row = 0.5,
-      cex_col = 0.5,
+      cex_row = 1,
+      cex_col = 1,
       scaling = input$gene_heatmap_scaling_type,
       cluster = input$gene_heatmap_clustering_type,
       dendrogram = input$gene_heatmap_dendrogram_list,
       show_names = input$gene_heatmap_show_names,
       heatmap_type = "ggheatmap"
     )
-    print(p)
   })
   
   # Render interactive heatmaply
@@ -839,12 +838,12 @@ server <- function(input, output, session) {
       color_by = input$gene_heatmap_color_by,
       sidebar_color_scheme = input$gene_heatmap_sidebar_color_palette,
       heatmap_color_scheme = input$gene_heatmap_color_scheme,
-      xlab = "",
+      xlab = "Samples",
       ylab = "Genes",
       column_text_angle = 90,
       legend_title = "Expression",
-      cex_row = 0.5,
-      cex_col = 0.5,
+      cex_row = 1,
+      cex_col = 1,
       scaling = input$gene_heatmap_scaling_type,
       cluster = input$gene_heatmap_clustering_type,
       dendrogram = input$gene_heatmap_dendrogram_list,
