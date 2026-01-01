@@ -1167,17 +1167,34 @@ prepare_gene_expression_matrix <- function(counts,
     gene_data <- counts[rownames(counts) %in% gene_list, ]
   }
   
+  # Remove samples if specified
   if (!is.null(remove_samples) && length(remove_samples) > 0) {
     keep_cols <- setdiff(colnames(gene_data), remove_samples)
     gene_data <- gene_data[, keep_cols, drop = FALSE]
   }
   
+  # Prepare expression matrix
   expr_matrix <- as.matrix(gene_data)
   
   expr_matrix[is.na(expr_matrix)] <- 0
   
+  # Create minimal colData
+  coldata_minimal <- data.frame(
+    row.names = colnames(expr_matrix),
+    condition = rep("sample", ncol(expr_matrix))
+  )
+  
+  # Create DESeqDataSet
+  dds = DESeqDataSetFromMatrix(countData = round(expr_matrix),
+                               colData = coldata_minimal,
+                               design = ~ 1)
+  
+  # Apply VST
+  vsd = vst(dds, blind = TRUE)
+  expr_matrix = as.data.frame(assay(vsd), stringAsFactors = FALSE)
+
   return(expr_matrix)
-}
+  }
 
 plot_gene_expression_heatmap <- function(counts,
                                          gene_list,
@@ -1308,11 +1325,37 @@ plot_gene_expression_heatmap <- function(counts,
     scale_param <- "none"
   }
   
-  # Select colors
-  if (heatmap_color_scheme == "RdYlBu") {
-    heatmap_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "RdYlBu")))(256)
+  # Select color scheme
+  selected_colors <- c()
+  if (length(heatmap_color_scheme) == 1) {
+    if (heatmap_color_scheme == "viridis") {
+      heatmap_colors <- viridis::viridis(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "magma") {
+      heatmap_colors <- viridis::magma(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "inferno") {
+      heatmap_colors <- viridis::inferno(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "plasma") {
+      heatmap_colors <- viridis::plasma(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "cividis") {
+      heatmap_colors <- viridis::cividis(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "rocket") {
+      heatmap_colors <- viridis::rocket(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "mako") {
+      heatmap_colors <- viridis::mako(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "turbo") {
+      heatmap_colors <- viridis::turbo(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "RdYlBu") {
+      heatmap_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "RdYlBu")))(256)
+    } else {
+      # Try as RColorBrewer palette
+      tryCatch({
+        heatmap_colors <- colorRampPalette(RColorBrewer::brewer.pal(9, heatmap_color_scheme))(256)
+      }, error = function(e) {
+        heatmap_colors <- viridis::viridis(n = 256, alpha = 1, begin = 0, end = 1)
+      })
+    }
   } else {
-    heatmap_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(9, heatmap_color_scheme)))(256)
+    heatmap_colors <- heatmap_color_scheme
   }
   
   if (tolower(heatmap_type) == "heatmaply") {
