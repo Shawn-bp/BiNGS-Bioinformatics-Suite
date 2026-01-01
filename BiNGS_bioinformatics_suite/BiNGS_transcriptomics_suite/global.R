@@ -916,9 +916,9 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
   rv <- rowVars(as.matrix(expr_matrix))
   
   # Select the ntop genes by variance
-  select <- order(rv, decreasing = TRUE)[seq_len(min(ntop, length(rv)))]
+  select <- order(rv, decreasing = TRUE) #Currently not necessary, removed ntop functionality for testing and it fixed the heatmap. I am unsure if this is an actual solution but the pipeline report does not mention selecting the top 500 genes for the sample distance heatmap.
   
-  # Calculate distance matrix using selected genes (THIS IS THE KEY - same as pipeline)
+  # Calculate distance matrix using selected genes
   sample_set <- colnames(expr_matrix)
   sampleDists <- dist(t(as.matrix(expr_matrix[select, ])))
   sampleDistMatrix <- as.matrix(sampleDists)
@@ -927,6 +927,9 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
   
   # Create formatted distance matrix (both rows and columns formatted)
   sampleDistMatrix2 <- as.data.frame(sampleDistMatrix)
+  
+  print("SampleDistMatrix2-1:")
+  print(sampleDistMatrix2)
   rownames(sampleDistMatrix2) <- stringr::str_to_title(gsub("_", " ", rownames(sampleDistMatrix)))
   colnames(sampleDistMatrix2) <- stringr::str_to_title(gsub("_", " ", rownames(sampleDistMatrix)))
   
@@ -956,6 +959,8 @@ plot_sample_distance_heatmap <- function(dist_matrix,
   # dist_matrix is already a data frame from run_sample_distance()
   sampleDistMatrix <- dist_matrix
   
+  print("SampleDistMatrix2-2:")
+  print(sampleDistMatrix)
   # Prepare side colors if metadata and color_by are provided
   row_side_colors <- NULL
   row_side_palette <- NULL
@@ -1076,7 +1081,6 @@ plot_sample_distance_heatmap <- function(dist_matrix,
     return(p)
     
   } else if (tolower(plot_type) == "ggplot") {
-    # For ggplot, we need to apply hierarchical clustering manually
     
     # Perform hierarchical clustering if dendrograms are requested
     hc_row <- NULL
