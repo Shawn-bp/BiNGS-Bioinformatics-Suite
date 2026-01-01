@@ -927,9 +927,6 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
   
   # Create formatted distance matrix (both rows and columns formatted)
   sampleDistMatrix2 <- as.data.frame(sampleDistMatrix)
-  
-  print("SampleDistMatrix2-1:")
-  print(sampleDistMatrix2)
   rownames(sampleDistMatrix2) <- stringr::str_to_title(gsub("_", " ", rownames(sampleDistMatrix)))
   colnames(sampleDistMatrix2) <- stringr::str_to_title(gsub("_", " ", rownames(sampleDistMatrix)))
   
@@ -959,8 +956,6 @@ plot_sample_distance_heatmap <- function(dist_matrix,
   # dist_matrix is already a data frame from run_sample_distance()
   sampleDistMatrix <- dist_matrix
   
-  print("SampleDistMatrix2-2:")
-  print(sampleDistMatrix)
   # Prepare side colors if metadata and color_by are provided
   row_side_colors <- NULL
   row_side_palette <- NULL
@@ -1310,9 +1305,9 @@ plot_gene_expression_heatmap <- function(counts,
   if (show_names == "none") {
     show_tick_labels <- c(FALSE, FALSE)
   } else if (show_names == "column" || show_names == "x") {
-    show_tick_labels <- c(FALSE, TRUE)
-  } else if (show_names == "row" || show_names == "y") {
     show_tick_labels <- c(TRUE, FALSE)
+  } else if (show_names == "row" || show_names == "y") {
+    show_tick_labels <- c(FALSE, TRUE)
   } else {
     show_tick_labels <- c(TRUE, TRUE)
   }
