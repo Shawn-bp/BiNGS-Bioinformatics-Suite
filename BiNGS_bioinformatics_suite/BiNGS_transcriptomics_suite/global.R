@@ -192,13 +192,36 @@ get_factor_comparisons = function(condition = c(),
 }
 
 modify_df <- function(counts_df, metadata, log, QC_check, gene, remove_samples = NULL){
-  #Remove specified samples
+  # Remove specified samples
   if (!is.null(remove_samples) && length(remove_samples) > 0) {
     keep_samples <- setdiff(metadata$sample_id, remove_samples)
     metadata <- metadata[metadata$sample_id %in% keep_samples, ]
     keep_cols <- c(intersect(colnames(counts_df), c("gene_id", "gene_name")), keep_samples)
     counts_df <- counts_df[, colnames(counts_df) %in% keep_cols, drop = FALSE]
   }
+  
+  # Normalize data
+  sample_cols <- setdiff(colnames(counts_df), c("gene_id", "gene_name"))
+  coldata_minimal <- data.frame(
+    row.names = sample_cols,
+    condition = rep("sample", length(sample_cols))
+  )
+  
+  counts_matrix <- as.matrix(counts_df[, sample_cols, drop = FALSE])
+  rownames(counts_matrix) <- counts_df$gene_id
+  
+  dds <- DESeq2::DESeqDataSetFromMatrix(
+    countData = round(counts_matrix),
+    colData = coldata_minimal,
+    design = ~ 1
+  )
+  
+  vsd <- DESeq2::vst(dds, blind = TRUE)
+  normalized_counts <- SummarizedExperiment::assay(vsd)
+  
+  # Put back into dataframe format
+  counts_df[, sample_cols] <- as.data.frame(normalized_counts)
+  
   if(QC_check == "no"){
     if(log == "yes"){
       counts_table_logged = counts_df[,metadata$sample_id]
