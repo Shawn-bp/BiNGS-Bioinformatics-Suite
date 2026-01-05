@@ -721,7 +721,7 @@ server <- function(input, output, session) {
   
   # ------------------ GENE EXPRESSION HEATMAP ------------------
   
-  # Apply VST to full dataset once when data loads
+  # NEW: Apply VST to full dataset once when data loads
   vst_data <- reactive({
     req(count_data(), sample_metadata())
     apply_vst_to_full_dataset(count_data(), sample_metadata())
