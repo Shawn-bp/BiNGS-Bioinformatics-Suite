@@ -1181,7 +1181,7 @@ prepare_gene_expression_matrix <- function(counts,
   return(expr_matrix)
 }
 
-apply_vst_to_full_dataset <- function(counts, metadata) {
+apply_vst <- function(counts, metadata) {
   
   # Extract numeric count columns
   if ("gene_id" %in% colnames(counts) || "gene_name" %in% colnames(counts)) {
