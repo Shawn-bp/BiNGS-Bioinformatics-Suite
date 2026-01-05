@@ -1181,7 +1181,6 @@ prepare_gene_expression_matrix <- function(counts,
   return(expr_matrix)
 }
 
-# NEW FUNCTION: Apply VST to full dataset ONCE
 apply_vst_to_full_dataset <- function(counts, metadata) {
   
   # Extract numeric count columns
@@ -1210,14 +1209,14 @@ apply_vst_to_full_dataset <- function(counts, metadata) {
     condition = rep("sample", ncol(count_matrix))
   )
   
-  # Create DESeqDataSet from FULL dataset
+  # Create DESeqDataSet from full dataset
   dds <- DESeqDataSetFromMatrix(
     countData = round(count_matrix),
     colData = coldata_minimal,
     design = ~ 1
   )
   
-  # Apply VST to FULL dataset
+  # Apply VST to full dataset
   vsd <- vst(dds, blind = TRUE)
   vst_matrix <- as.data.frame(assay(vsd), stringsAsFactors = FALSE)
   
@@ -1252,7 +1251,7 @@ plot_gene_expression_heatmap <- function(counts,
                                          scaling = "none",
                                          show_names = "both",
                                          heatmap_type = "heatmaply",
-                                         vst_data = NULL) {  # NEW PARAMETER
+                                         vst_data = NULL) { 
   
   # Extract expression data for selected genes and samples
   if ("gene_id" %in% colnames(counts) || "gene_name" %in% colnames(counts)) {
