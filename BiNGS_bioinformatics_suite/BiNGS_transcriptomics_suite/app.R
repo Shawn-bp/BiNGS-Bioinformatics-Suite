@@ -225,13 +225,14 @@ ui <- fluidPage(
                         options = list(`actions-box` = TRUE),
                         multiple = FALSE
                       ),
+                      radioButtons("sample_distance_sidebar_color_palette",
+                                   "Sidebar color palette:",
+                                   choices = as.list(color_palette_list),
+                                   selected = color_palette_list[[2]]),
                       radioButtons("sample_distance_heatmap_show_names",
                                    "Show sample names:",
-                                   choices = list("None" = "none",
-                                                  "X-axis only" = "x",
-                                                  "Y-axis only" = "y",
-                                                  "Both" = "both"),
-                                   selected = "both"),
+                                   choices = as.list(sample_distance_show_names_list),
+                                   selected = sample_distance_show_names_list[[4]]),
                       radioButtons("sample_distance_heatmap_color_palette",
                                    "Select the color palette to use:",
                                    choices = as.list(heatmap_color_scheme_list),
@@ -292,7 +293,10 @@ ui <- fluidPage(
                         selected = NULL,
                         options = list(
                           `actions-box` = TRUE,
-                          placeholder = "Select one or more genes"
+                          placeholder = "Type or paste gene names (comma or space separated)",
+                          create = TRUE,
+                          persist = FALSE,
+                          plugins = list('remove_button')
                         ),
                         multiple = TRUE
                       ),
@@ -311,7 +315,7 @@ ui <- fluidPage(
                       radioButtons("gene_heatmap_sidebar_color_palette",
                                    "Sidebar color palette:",
                                    choices = as.list(color_palette_list),
-                                   selected = color_palette_list[[1]]),
+                                   selected = color_palette_list[[2]]),
                       radioButtons("gene_heatmap_color_scheme",
                                    "Select the color palette to use:",
                                    choices = as.list(heatmap_color_scheme_list),
@@ -630,20 +634,15 @@ server <- function(input, output, session) {
   })
   
   observeEvent(sample_metadata(), {
-    md_choices <- colnames(sample_metadata())
-    md_choices_no_id <- setdiff(md_choices, "sample_id")
-    updateSelectizeInput(session, "metadata_color_bars", choices = md_choices_no_id, selected = if ("condition" %in% md_choices_no_id) "condition" else md_choices_no_id[1], server = TRUE)
-  })
-  
-  observeEvent(sample_metadata(), {
-    updateSelectizeInput(session, "metadata_color_bars", label = "Select metadata field to color by:",
+    updateSelectizeInput(session, "metadata_color_bars", 
+                         label = "Select metadata field to color by:",
                          choices = setdiff(colnames(sample_metadata()), metadata_columns_to_remove),
                          selected = if ("condition" %in% colnames(sample_metadata())) "condition" else setdiff(colnames(sample_metadata()), metadata_columns_to_remove)[1],
                          server = TRUE)
   })
   
-  # ---- Reactive: compute distance matrix on button press ----
-  dist_matrix_reactive <- eventReactive(input$sample_distance_run_button, {
+  # ---- Reactive: compute distance matrix (updates immediately) ----
+  dist_matrix_reactive <- reactive({
     req(count_data(), sample_metadata())
     
     samples_remove <- input$sample_distance_samples_to_remove
@@ -654,20 +653,20 @@ server <- function(input, output, session) {
       metadata = sample_metadata(),
       remove_samples = samples_remove,
       scale_type = input$sample_distance_heatmap_scaling_type,
-      ntop = 500
+      ntop = NULL
     )
   })
   
   # ---- Render static ggplot heatmap ----
   output$sample_distance_heatmap <- renderPlot({
-    req(count_data(), sample_metadata())
+    req(dist_matrix_reactive())
     
     p <- plot_sample_distance_heatmap(
       dist_matrix = dist_matrix_reactive(),
       metadata = sample_metadata(),
       color_by = input$metadata_color_bars,
-      sidebar_color_scheme = "Set1",
       heatmap_title = "Sample Distance Heatmap",
+      sidebar_color_scheme = input$sample_distance_sidebar_color_palette,
       heatmap_color_scheme = input$sample_distance_heatmap_color_palette,
       column_text_angle = 45,
       show_dendrogram = c(
@@ -676,8 +675,8 @@ server <- function(input, output, session) {
       ),
       plot_type = "ggplot",
       show_tick_labels = c(
-        input$sample_distance_heatmap_show_names %in% c("row", "both"),
-        input$sample_distance_heatmap_show_names %in% c("column", "both")
+        input$sample_distance_heatmap_show_names %in% c("x", "both"),
+        input$sample_distance_heatmap_show_names %in% c("y", "both")
       )
     )
     print(p)
@@ -685,14 +684,14 @@ server <- function(input, output, session) {
   
   # ---- Render heatmaply ----
   output$sample_distance_heatmaply <- renderPlotly({
-    req(count_data(), sample_metadata())
+    req(dist_matrix_reactive())
     
     hm <- plot_sample_distance_heatmap(
       dist_matrix = dist_matrix_reactive(),
       metadata = sample_metadata(),
       color_by = input$metadata_color_bars,
-      sidebar_color_scheme = "Set1",
       heatmap_title = "Sample Distance Heatmap",
+      sidebar_color_scheme = input$sample_distance_sidebar_color_palette,
       heatmap_color_scheme = input$sample_distance_heatmap_color_palette,
       column_text_angle = 45,
       show_dendrogram = c(
@@ -701,10 +700,10 @@ server <- function(input, output, session) {
       ),
       plot_type = "heatmaply",
       show_tick_labels = c(
-        input$sample_distance_heatmap_show_names %in% c("row", "both"),
-        input$sample_distance_heatmap_show_names %in% c("column", "both")
+        input$sample_distance_heatmap_show_names %in% c("x", "both"),
+        input$sample_distance_heatmap_show_names %in% c("y", "both")
       ),
-      colorbar_xpos = 1.02,
+      colorbar_xpos = 1,
       colorbar_ypos = 0.5,
       colorbar_len = 0.4
     )
@@ -721,6 +720,12 @@ server <- function(input, output, session) {
   )
   
   # ------------------ GENE EXPRESSION HEATMAP ------------------
+  
+  # Apply VST to full dataset once when data loads
+  vst_data <- reactive({
+    req(count_data(), sample_metadata())
+    apply_vst_to_full_dataset(count_data(), sample_metadata())
+  })
   
   # Update gene list choices when count data loads
   observeEvent(count_data(), {
@@ -754,28 +759,20 @@ server <- function(input, output, session) {
                          server = TRUE)
   })
   
-  # NEW: Add gene annotations reactive (if you have gene annotation data)
-  gene_annotations_reactive <- reactive({
-    # If you have a gene annotations file input
-    if (!is.null(input$gene_annotations_file)) {
-      read.csv(input$gene_annotations_file$datapath)
-    } else if (exists("gene_annotations")) {
-      # Or if you have it pre-loaded as a global variable
-      gene_annotations
-    } else {
-      # Return NULL if no annotations available
-      NULL
-    }
-  })
+  # Add gene annotations reactive(remnant of old solution)
+  gene_annotations_reactive <- reactive({NULL})
   
   # Reactive: prepare gene list and sample list
-  gene_sample_lists_reactive <- eventReactive(input$gene_heatmap_run_button, {
+  gene_sample_lists_reactive <- eventReactive({
+    input$gene_heatmap_run_button
+    input$samples_to_remove_select
+  }, {
     req(count_data(), input$gene_list_select)
     
     # Get selected genes
     gene_list <- input$gene_list_select
     
-    # Get sample list (all samples minus removed ones)
+    # Get sample list
     all_samples <- colnames(count_data())
     all_samples <- all_samples[!all_samples %in% c("gene_id", "gene_name")]
     
@@ -790,11 +787,11 @@ server <- function(input, output, session) {
       gene_list = gene_list,
       sample_list = sample_list
     )
-  })
+  }, ignoreNULL = FALSE)
   
   # Render static ggplot heatmap
   output$gene_expression_heatmap_ggplot <- renderPlot({
-    req(gene_sample_lists_reactive())
+    req(gene_sample_lists_reactive(), vst_data())
     
     lists <- gene_sample_lists_reactive()
     
@@ -818,13 +815,15 @@ server <- function(input, output, session) {
       cluster = input$gene_heatmap_clustering_type,
       dendrogram = input$gene_heatmap_dendrogram_list,
       show_names = input$gene_heatmap_show_names,
-      heatmap_type = "ggheatmap"
+      heatmap_type = "ggheatmap",
+      vst_data = vst_data()
     )
-  })
+    print(p)
+  }, height = 700, width = 1000)
   
   # Render interactive heatmaply
   output$gene_expression_heatmap_heatmaply <- renderPlotly({
-    req(gene_sample_lists_reactive())
+    req(gene_sample_lists_reactive(), vst_data())
     
     lists <- gene_sample_lists_reactive()
     
@@ -848,27 +847,34 @@ server <- function(input, output, session) {
       cluster = input$gene_heatmap_clustering_type,
       dendrogram = input$gene_heatmap_dendrogram_list,
       show_names = input$gene_heatmap_show_names,
-      heatmap_type = "heatmaply"
+      heatmap_type = "heatmaply",
+      vst_data = vst_data()
     )
   })
   
-  # Download gene expression matrix (updated to use new function)
+  # Download gene expression matrix
   output$download_gene_heatmap_data <- downloadHandler(
     filename = function() { 
       paste0("gene_expression_heatmap_", input$gene_heatmap_scaling_type, "_", Sys.Date(), ".csv") 
     },
     content = function(file) {
-      req(gene_sample_lists_reactive())
+      req(gene_sample_lists_reactive(), vst_data())
       
       lists <- gene_sample_lists_reactive()
       
-      # Prepare the matrix
-      expr_matrix <- prepare_gene_expression_matrix(
-        counts = count_data(),
-        metadata = sample_metadata(),
-        gene_list = lists$gene_list,
-        remove_samples = input$samples_to_remove_select
-      )
+      # Extract the VST-transformed data for selected genes
+      if ("gene_name" %in% colnames(vst_data())) {
+        expr_matrix <- vst_data()[vst_data()$gene_name %in% lists$gene_list, 
+                                  lists$sample_list, drop = FALSE]
+        rownames(expr_matrix) <- vst_data()$gene_name[vst_data()$gene_name %in% lists$gene_list]
+      } else if ("gene_id" %in% colnames(vst_data())) {
+        expr_matrix <- vst_data()[vst_data()$gene_id %in% lists$gene_list, 
+                                  lists$sample_list, drop = FALSE]
+        rownames(expr_matrix) <- vst_data()$gene_id[vst_data()$gene_id %in% lists$gene_list]
+      } else {
+        expr_matrix <- vst_data()[rownames(vst_data()) %in% lists$gene_list, 
+                                  lists$sample_list, drop = FALSE]
+      }
       
       write.csv(expr_matrix, file, row.names = TRUE)
     }
