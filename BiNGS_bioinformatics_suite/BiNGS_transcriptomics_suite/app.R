@@ -721,10 +721,9 @@ server <- function(input, output, session) {
   
   # ------------------ GENE EXPRESSION HEATMAP ------------------
   
-  # NEW: Apply VST to full dataset once when data loads
   vst_data <- reactive({
     req(count_data(), sample_metadata())
-    apply_vst_to_full_dataset(count_data(), sample_metadata())
+    apply_vst(count_data(), sample_metadata())
   })
   
   # Update gene list choices when count data loads
@@ -759,7 +758,7 @@ server <- function(input, output, session) {
                          server = TRUE)
   })
   
-  # Add gene annotations reactive(remnant of old solution)
+  # Add gene annotations reactive(remnant of old solution, currently not needed)
   gene_annotations_reactive <- reactive({NULL})
   
   # Reactive: prepare gene list and sample list
