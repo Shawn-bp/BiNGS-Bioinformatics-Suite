@@ -889,7 +889,7 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
     rownames(expr_matrix) <- counts$gene_id
   }
   
-  # Apply scaling/transformation to the selected genes
+  # Apply scaling/transformation first
   if (scale_type == "row") {
     expr_matrix <- t(scale(t(expr_matrix)))
   } else if (scale_type == "column") {
@@ -904,14 +904,16 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
     )
     
     # Create DESeqDataSet
-    dds = DESeqDataSetFromMatrix(countData = round(expr_matrix),
-                                 colData = coldata_minimal,
-                                 design = ~ 1)
+    dds <- DESeq2::DESeqDataSetFromMatrix(
+      countData = round(expr_matrix),
+      colData = coldata_minimal,
+      design = ~ 1
+    )
     
     # Apply VST
-    vsd = vst(dds, blind = TRUE)
-    expr_matrix = as.data.frame(assay(vsd), stringAsFactors = FALSE)
-  
+    vsd <- DESeq2::vst(dds, blind = TRUE)
+    expr_matrix <- as.matrix(SummarizedExperiment::assay(vsd))
+  }
   # Calculate variance for each gene and select top ntop genes
   rv <- rowVars(as.matrix(expr_matrix))
   
@@ -932,7 +934,6 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
   
   return(sampleDistMatrix2)
   }
-}
 
 plot_sample_distance_heatmap <- function(dist_matrix, 
                                          metadata = NULL,
@@ -961,7 +962,7 @@ plot_sample_distance_heatmap <- function(dist_matrix,
   row_side_palette <- NULL
   
   if (!is.null(metadata) && !is.null(color_by) && color_by %in% colnames(metadata)) {
-    # Get original sample names (before formatting) - convert back from formatted names
+    # Get original sample names (before formatting)
     formatted_names <- rownames(sampleDistMatrix)
     original_names <- tolower(gsub(" ", "_", formatted_names))
     
@@ -1177,23 +1178,59 @@ prepare_gene_expression_matrix <- function(counts,
   
   expr_matrix[is.na(expr_matrix)] <- 0
   
+  return(expr_matrix)
+}
+
+# NEW FUNCTION: Apply VST to full dataset ONCE
+apply_vst_to_full_dataset <- function(counts, metadata) {
+  
+  # Extract numeric count columns
+  if ("gene_id" %in% colnames(counts) || "gene_name" %in% colnames(counts)) {
+    gene_cols <- intersect(colnames(counts), c("gene_id", "gene_name"))
+    count_matrix <- as.matrix(counts[, !colnames(counts) %in% gene_cols, drop = FALSE])
+    
+    if ("gene_name" %in% colnames(counts)) {
+      rownames(count_matrix) <- counts$gene_name
+    } else if ("gene_id" %in% colnames(counts)) {
+      rownames(count_matrix) <- counts$gene_id
+    }
+  } else {
+    count_matrix <- as.matrix(counts)
+  }
+  
+  # Remove samples not in metadata if metadata provided
+  if (!is.null(metadata)) {
+    common_samples <- intersect(colnames(count_matrix), metadata$sample_id)
+    count_matrix <- count_matrix[, common_samples, drop = FALSE]
+  }
+  
   # Create minimal colData
   coldata_minimal <- data.frame(
-    row.names = colnames(expr_matrix),
-    condition = rep("sample", ncol(expr_matrix))
+    row.names = colnames(count_matrix),
+    condition = rep("sample", ncol(count_matrix))
   )
   
-  # Create DESeqDataSet
-  dds = DESeqDataSetFromMatrix(countData = round(expr_matrix),
-                               colData = coldata_minimal,
-                               design = ~ 1)
+  # Create DESeqDataSet from FULL dataset
+  dds <- DESeqDataSetFromMatrix(
+    countData = round(count_matrix),
+    colData = coldata_minimal,
+    design = ~ 1
+  )
   
-  # Apply VST
-  vsd = vst(dds, blind = TRUE)
-  expr_matrix = as.data.frame(assay(vsd), stringAsFactors = FALSE)
-
-  return(expr_matrix)
+  # Apply VST to FULL dataset
+  vsd <- vst(dds, blind = TRUE)
+  vst_matrix <- as.data.frame(assay(vsd), stringsAsFactors = FALSE)
+  
+  # Add back gene_id/gene_name columns if they existed
+  if ("gene_name" %in% colnames(counts)) {
+    vst_matrix$gene_name <- rownames(vst_matrix)
+    vst_matrix$gene_id <- counts$gene_id[match(rownames(vst_matrix), counts$gene_name)]
+  } else if ("gene_id" %in% colnames(counts)) {
+    vst_matrix$gene_id <- rownames(vst_matrix)
   }
+  
+  return(vst_matrix)
+}
 
 plot_gene_expression_heatmap <- function(counts,
                                          gene_list,
@@ -1214,22 +1251,28 @@ plot_gene_expression_heatmap <- function(counts,
                                          dendrogram = "both",
                                          scaling = "none",
                                          show_names = "both",
-                                         heatmap_type = "heatmaply") {
+                                         heatmap_type = "heatmaply",
+                                         vst_data = NULL) {  # NEW PARAMETER
   
   # Extract expression data for selected genes and samples
   if ("gene_id" %in% colnames(counts) || "gene_name" %in% colnames(counts)) {
     # If counts has gene_id/gene_name columns
     gene_cols <- intersect(colnames(counts), c("gene_id", "gene_name"))
-    dat <- counts[counts$gene_name %in% gene_list | counts$gene_id %in% gene_list, 
-                  sample_list, drop = FALSE]
-    rownames(dat) <- if("gene_name" %in% colnames(counts)) {
-      counts$gene_name[counts$gene_name %in% gene_list | counts$gene_id %in% gene_list]
+    
+    # Use VST data if provided, otherwise use raw counts
+    data_to_use <- if (!is.null(vst_data)) vst_data else counts
+    
+    dat <- data_to_use[data_to_use$gene_name %in% gene_list | data_to_use$gene_id %in% gene_list, 
+                       sample_list, drop = FALSE]
+    rownames(dat) <- if("gene_name" %in% colnames(data_to_use)) {
+      data_to_use$gene_name[data_to_use$gene_name %in% gene_list | data_to_use$gene_id %in% gene_list]
     } else {
-      counts$gene_id[counts$gene_name %in% gene_list | counts$gene_id %in% gene_list]
+      data_to_use$gene_id[data_to_use$gene_name %in% gene_list | data_to_use$gene_id %in% gene_list]
     }
   } else {
     # If counts is already a matrix with gene names as rownames
-    dat <- counts[rownames(counts) %in% gene_list, sample_list, drop = FALSE]
+    data_to_use <- if (!is.null(vst_data)) vst_data else counts
+    dat <- data_to_use[rownames(data_to_use) %in% gene_list, sample_list, drop = FALSE]
   }
   
   # Remove genes with zero variance
