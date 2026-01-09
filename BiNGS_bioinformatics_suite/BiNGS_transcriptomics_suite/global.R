@@ -956,7 +956,7 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
   colnames(sampleDistMatrix2) <- stringr::str_to_title(gsub("_", " ", rownames(sampleDistMatrix)))
   
   return(sampleDistMatrix2)
-  }
+}
 
 plot_sample_distance_heatmap <- function(dist_matrix, 
                                          metadata = NULL,
@@ -1149,7 +1149,6 @@ plot_sample_distance_heatmap <- function(dist_matrix,
         plot.title = ggplot2::element_text(hjust = 0.5, size = 16, face = "bold"),
         axis.text.x = ggplot2::element_text(
           angle = column_text_angle, 
-          hjust = 1, 
           vjust = 0.5, 
           size = 10
         ),
@@ -1162,11 +1161,11 @@ plot_sample_distance_heatmap <- function(dist_matrix,
       )
     
     # Handle tick label visibility
-    if (!show_tick_labels[1]) {
+    if (!show_tick_labels[2]) {
       p <- p + ggplot2::theme(axis.text.y = ggplot2::element_blank(),
                               axis.ticks.y = ggplot2::element_blank())
     }
-    if (!show_tick_labels[2]) {
+    if (!show_tick_labels[1]) {
       p <- p + ggplot2::theme(axis.text.x = ggplot2::element_blank(),
                               axis.ticks.x = ggplot2::element_blank())
     }
