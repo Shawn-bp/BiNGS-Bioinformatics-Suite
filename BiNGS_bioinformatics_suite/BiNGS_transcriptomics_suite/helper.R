@@ -1,5 +1,3 @@
-
-
 #------------------- PCA specific variables ------------------- 
 pca_color_palette_list = c(
   "Set1 (Bright reds/blues)" = "Set1",
