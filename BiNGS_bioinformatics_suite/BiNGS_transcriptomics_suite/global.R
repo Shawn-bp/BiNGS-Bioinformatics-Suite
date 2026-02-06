@@ -1,62 +1,32 @@
-
 # ------------------ PCA ------------------
-# Run PCA
 run_pca <- function(counts, metadata, ntop = 500, remove_samples = NULL) {
   
-  # Extract expression matrix (remove gene_id/gene_name columns)
   gene_cols <- intersect(colnames(counts), c("gene_id", "gene_name"))
   
-  # Get sample columns only
   sample_cols <- setdiff(colnames(counts), gene_cols)
   
-  # Remove specified samples
   if (!is.null(remove_samples) && length(remove_samples) > 0) {
     sample_cols <- setdiff(sample_cols, remove_samples)
     metadata <- metadata[metadata$sample_id %in% sample_cols, ]
   }
   
-  # Create matrix with sample columns
   expr_matrix <- as.matrix(counts[, sample_cols, drop = FALSE])
   
-  # Set rownames if gene_id exists
   if ("gene_id" %in% colnames(counts)) {
     rownames(expr_matrix) <- counts$gene_id
   }
   
-  # Apply VST transformation
-  coldata_minimal <- data.frame(
-    row.names = colnames(expr_matrix),
-    condition = rep("sample", ncol(expr_matrix))
-  )
-  
-  # Create DESeqDataSet
-  dds <- DESeq2::DESeqDataSetFromMatrix(
-    countData = round(expr_matrix),  
-    colData = coldata_minimal,
-    design = ~ 1  
-  )
-  
-  # Apply VST
-  vst_data <- DESeq2::vst(dds, blind = TRUE)
-  expr_matrix <- SummarizedExperiment::assay(vst_data)
-  
-  # Calculate the variance for each gene
   rv <- matrixStats::rowVars(expr_matrix)
   
-  # Select the ntop genes by variance
   select <- order(rv, decreasing = TRUE)[seq_len(min(ntop, length(rv)))]
   
-  # Perform PCA on transposed data for selected genes
   pca <- prcomp(t(expr_matrix[select, ]))
   
-  # Calculate variance explained
   percentVar <- pca$sdev^2 / sum(pca$sdev^2)
   
-  # Create coordinates data frame
   pca_coords <- as.data.frame(pca$x)
   pca_coords$sample_id <- rownames(pca_coords)
   
-  # Join with metadata
   if (!is.null(metadata)) {
     pca_coords <- dplyr::left_join(pca_coords, metadata, by = "sample_id")
   }
@@ -64,11 +34,10 @@ run_pca <- function(counts, metadata, ntop = 500, remove_samples = NULL) {
   return(list(
     pca = pca,
     coords = pca_coords,
-    variance = percentVar * 100  # Convert to percentage
+    variance = percentVar * 100
   ))
 }
 
-# Plot PCA
 plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL, shape_var = NULL,
                      palette = "Set1", plot_type = "ggplot") {
   
@@ -77,7 +46,7 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL, shape_v
   
   if (plot_type == "ggplot") {
     p <- ggplot(pca_coords, aes_string(x = x_pc, y = y_pc, color = color_var, shape = shape_var)) +
-      geom_point(size = 4, alpha = 0.8) +
+      geom_point(size = 6, alpha = 0.8) +
       scale_color_brewer(palette = palette, name = color_var) +
       labs(
         title = "Principal Component Analysis",
@@ -96,7 +65,6 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL, shape_v
         legend.key = element_rect(fill = "white"),
       )
     
-    # Add shape scale if shape_var is provided
     if (!is.null(shape_var) && shape_var != "") {
       p <- p + scale_shape_discrete(name = shape_var)
     }
@@ -105,7 +73,6 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL, shape_v
     
   } else if (plot_type == "plotly") {
     
-    # Prepare symbol mapping for plotly if shape_var is provided
     symbol_var <- NULL
     if (!is.null(shape_var) && shape_var != "") {
       symbol_var <- pca_coords[[shape_var]]
@@ -121,7 +88,7 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL, shape_v
       colors = RColorBrewer::brewer.pal(max(3, length(unique(pca_coords[[color_var]]))), palette),
       type = "scatter",
       mode = "markers",
-      marker = list(size = 10),
+      marker = list(size = 15),
       text = ~sample_id,
       hovertemplate = paste0(
         "<b>%{text}</b><br>",
@@ -180,11 +147,9 @@ get_factor_comparisons = function(condition = c(),
   comparisons = as.data.frame(comparisons, stringsAsFactors = FALSE)
   colnames(comparisons) = c("comparison_group", "reference_group")
   
-  # remove identical condition comparisons
   comparisons = comparisons[which(comparisons$comparison_group != comparisons$reference_group), ]
   comparisons = comparisons[order(comparisons$reference_group), , drop = FALSE]
   
-  # remove reverse comparisons
   comparisons$comparison_name = paste0(comparisons$comparison_group, "_vs_", comparisons$reference_group)
   comparisons = comparisons[, c("comparison_name", "comparison_group", "reference_group"), drop = FALSE]
   rownames(comparisons) = NULL
@@ -193,35 +158,12 @@ get_factor_comparisons = function(condition = c(),
 }
 
 modify_df <- function(counts_df, metadata, log, QC_check, gene, remove_samples = NULL){
-  # Remove specified samples
   if (!is.null(remove_samples) && length(remove_samples) > 0) {
     keep_samples <- setdiff(metadata$sample_id, remove_samples)
     metadata <- metadata[metadata$sample_id %in% keep_samples, ]
     keep_cols <- c(intersect(colnames(counts_df), c("gene_id", "gene_name")), keep_samples)
     counts_df <- counts_df[, colnames(counts_df) %in% keep_cols, drop = FALSE]
   }
-  
-  # Normalize data
-  sample_cols <- setdiff(colnames(counts_df), c("gene_id", "gene_name"))
-  coldata_minimal <- data.frame(
-    row.names = sample_cols,
-    condition = rep("sample", length(sample_cols))
-  )
-  
-  counts_matrix <- as.matrix(counts_df[, sample_cols, drop = FALSE])
-  rownames(counts_matrix) <- counts_df$gene_id
-  
-  dds <- DESeq2::DESeqDataSetFromMatrix(
-    countData = round(counts_matrix),
-    colData = coldata_minimal,
-    design = ~ 1
-  )
-  
-  vsd <- DESeq2::vst(dds, blind = TRUE)
-  normalized_counts <- SummarizedExperiment::assay(vsd)
-  
-  # Put back into dataframe format
-  counts_df[, sample_cols] <- as.data.frame(normalized_counts)
   
   if(QC_check == "no"){
     if(log == "yes"){
@@ -262,7 +204,6 @@ modify_df <- function(counts_df, metadata, log, QC_check, gene, remove_samples =
 
 
 modify_table <- function(counts_df, metadata, log, QC_check, gene, fact_var, remove_samples = NULL){
-  # Remove specified samples
   if (!is.null(remove_samples) && length(remove_samples) > 0) {
     keep_samples <- setdiff(metadata$sample_id, remove_samples)
     metadata <- metadata[metadata$sample_id %in% keep_samples, ]
@@ -316,7 +257,6 @@ modify_table <- function(counts_df, metadata, log, QC_check, gene, fact_var, rem
 }
 
 table_pvalue = function(counts_df, metadata, log, QC_check, gene, fact_var, remove_samples = NULL){
-  # Remove specified samples
   if (!is.null(remove_samples) && length(remove_samples) > 0) {
     keep_samples <- setdiff(metadata$sample_id, remove_samples)
     metadata <- metadata[metadata$sample_id %in% keep_samples, ]
@@ -415,7 +355,6 @@ table_pvalue = function(counts_df, metadata, log, QC_check, gene, fact_var, remo
   }}
 
 table_panova = function(counts_df, metadata, log, QC_check, gene, fact_var, remove_samples = NULL){
-  # Remove specified samples
   if (!is.null(remove_samples) && length(remove_samples) > 0) {
     keep_samples <- setdiff(metadata$sample_id, remove_samples)
     metadata <- metadata[metadata$sample_id %in% keep_samples, ]
@@ -558,7 +497,7 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
             gridcolor = '#e0e0e0'
           ),
           yaxis = list(
-            title = list(text = paste0("<b>", ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression</b>")),
+            title = list(text = paste0("<b>", ifelse(log == "yes", "Log₂ ", ""), "Gene Expression</b>")),
             zerolinecolor = '#969696',
             zerolinewidth = 2,
             linecolor = '#636363',
@@ -598,7 +537,7 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
             gridcolor = '#e0e0e0'
           ),
           yaxis = list(
-            title = list(text = paste0("<b>", ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression</b>")),
+            title = list(text = paste0("<b>", ifelse(log == "yes", "Log₂ ", ""), "Gene Expression</b>")),
             zerolinecolor = '#969696',
             zerolinewidth = 2,
             linecolor = '#636363',
@@ -638,7 +577,7 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
             gridcolor = '#e0e0e0'
           ),
           yaxis = list(
-            title = list(text = paste0("<b>", ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression</b>")),
+            title = list(text = paste0("<b>", ifelse(log == "yes", "Log₂ ", ""), "Gene Expression</b>")),
             zerolinecolor = '#969696',
             zerolinewidth = 2,
             linecolor = '#636363',
@@ -680,7 +619,7 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
             gridcolor = '#e0e0e0'
           ),
           yaxis = list(
-            title = list(text = paste0("<b>", ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression</b>")),
+            title = list(text = paste0("<b>", ifelse(log == "yes", "Log₂ ", ""), "Gene Expression</b>")),
             zerolinecolor = '#969696',
             zerolinewidth = 2,
             linecolor = '#636363',
@@ -715,7 +654,7 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
       if (box_type == "Boxplot"){
         ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
           geom_boxplot(notch = FALSE, alpha = 0.2, outlier.shape = NA) +
-          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression")) + 
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Gene Expression")) + 
           xlab("Sample Groups") +
           ggtitle(paste(gene, "Gene Expression")) +
           scale_color_manual(values = my_colors, name = factor) + 
@@ -737,7 +676,7 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
         ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
           geom_boxplot(notch = FALSE, alpha = 0.2, outlier.shape = NA) +
           geom_jitter(size = 2, alpha = 0.6, width = 0.2) +
-          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression")) + 
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Gene Expression")) + 
           xlab("Sample Groups") +
           ggtitle(paste(gene, "Gene Expression")) +
           scale_color_manual(values = my_colors, name = factor) + 
@@ -758,7 +697,7 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
       } else if(box_type == "Violin plot"){
         ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
           geom_violin(alpha = 0.2) +
-          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression")) + 
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Gene Expression")) + 
           xlab("Sample Groups") +
           ggtitle(paste(gene, "Gene Expression")) +
           scale_color_manual(values = my_colors, name = factor) + 
@@ -780,7 +719,7 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
         ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
           geom_violin(alpha = 0.2) +
           geom_jitter(size = 2, alpha = 0.6, width = 0.2) +
-          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression")) + 
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Gene Expression")) + 
           xlab("Sample Groups") +
           ggtitle(paste(gene, "Gene Expression")) +
           scale_color_manual(values = my_colors, name = factor) + 
@@ -803,7 +742,7 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
       if (box_type == "Boxplot"){
         ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
           geom_boxplot(notch = FALSE, alpha = 0.2, outlier.shape = NA) +
-          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression")) + 
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Gene Expression")) + 
           xlab("Sample Groups") +
           ggtitle(paste(gene, "Gene Expression")) +
           scale_color_manual(values = my_colors, name = factor) + 
@@ -824,7 +763,7 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
         ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
           geom_boxplot(notch = FALSE, alpha = 0.2, outlier.shape = NA) +
           geom_jitter(size = 2, alpha = 0.6, width = 0.2) +
-          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression")) + 
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Gene Expression")) + 
           xlab("Sample Groups") +
           ggtitle(paste(gene, "Gene Expression")) +
           scale_color_manual(values = my_colors, name = factor) + 
@@ -844,7 +783,7 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
       } else if(box_type == "Violin plot"){
         ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
           geom_violin(alpha = 0.2) +
-          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression")) + 
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Gene Expression")) + 
           xlab("Sample Groups") +
           ggtitle(paste(gene, "Gene Expression")) +
           scale_color_manual(values = my_colors, name = factor) + 
@@ -865,7 +804,7 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
         ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
           geom_violin(alpha = 0.2) +
           geom_jitter(size = 2, alpha = 0.6, width = 0.2) +
-          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Normalized Gene Expression")) + 
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Gene Expression")) + 
           xlab("Sample Groups") +
           ggtitle(paste(gene, "Gene Expression")) +
           scale_color_manual(values = my_colors, name = factor) + 
@@ -888,16 +827,12 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
 
 ## ------------------ SAMPLE DISTANCE HEATMAP ------------------
 
-# Calculate distance matrix
 run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, scale_type = "none", ntop = 500) {
   
-  # Extract expression matrix (remove gene_id/gene_name columns)
   gene_cols <- intersect(colnames(counts), c("gene_id", "gene_name"))
   
-  # Get sample columns only
   sample_cols <- setdiff(colnames(counts), gene_cols)
   
-  # Remove specified samples
   if (!is.null(remove_samples) && length(remove_samples) > 0) {
     sample_cols <- setdiff(sample_cols, remove_samples)
     if (!is.null(metadata)) {
@@ -905,53 +840,30 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
     }
   }
   
-  # Create matrix with sample columns
   expr_matrix <- as.matrix(counts[, sample_cols, drop = FALSE])
   
-  # Set rownames if gene_id exists
   if ("gene_id" %in% colnames(counts)) {
     rownames(expr_matrix) <- counts$gene_id
   }
   
-  # Apply scaling/transformation first
   if (scale_type == "row") {
     expr_matrix <- t(scale(t(expr_matrix)))
   } else if (scale_type == "column") {
     expr_matrix <- scale(expr_matrix)
   } else if (scale_type == "log") {
     expr_matrix <- log10(expr_matrix + 1)
-  } else if (scale_type == "vst") {
-    # Create minimal colData
-    coldata_minimal <- data.frame(
-      row.names = colnames(expr_matrix),
-      condition = rep("sample", ncol(expr_matrix))
-    )
-    
-    # Create DESeqDataSet
-    dds <- DESeq2::DESeqDataSetFromMatrix(
-      countData = round(expr_matrix),
-      colData = coldata_minimal,
-      design = ~ 1
-    )
-    
-    # Apply VST
-    vsd <- DESeq2::vst(dds, blind = TRUE)
-    expr_matrix <- as.matrix(SummarizedExperiment::assay(vsd))
   }
-  # Calculate variance for each gene and select top ntop genes
+  
   rv <- rowVars(as.matrix(expr_matrix))
   
-  # Select the ntop genes by variance
-  select <- order(rv, decreasing = TRUE) #Currently not necessary, removed ntop functionality for testing and it fixed the heatmap. I am unsure if this is an actual solution but the pipeline report does not mention selecting the top 500 genes for the sample distance heatmap.
+  select <- order(rv, decreasing = TRUE)
   
-  # Calculate distance matrix using selected genes
   sample_set <- colnames(expr_matrix)
   sampleDists <- dist(t(as.matrix(expr_matrix[select, ])))
   sampleDistMatrix <- as.matrix(sampleDists)
   rownames(sampleDistMatrix) <- sample_set
   colnames(sampleDistMatrix) <- NULL
   
-  # Create formatted distance matrix (both rows and columns formatted)
   sampleDistMatrix2 <- as.data.frame(sampleDistMatrix)
   rownames(sampleDistMatrix2) <- stringr::str_to_title(gsub("_", " ", rownames(sampleDistMatrix)))
   colnames(sampleDistMatrix2) <- stringr::str_to_title(gsub("_", " ", rownames(sampleDistMatrix)))
@@ -978,41 +890,32 @@ plot_sample_distance_heatmap <- function(dist_matrix,
                                          show_tick_labels = c(TRUE, TRUE),
                                          colorbar_len = 0.4) {
   
-  # dist_matrix is already a data frame from run_sample_distance()
   sampleDistMatrix <- dist_matrix
   
-  # Prepare side colors if metadata and color_by are provided
   row_side_colors <- NULL
   row_side_palette <- NULL
   
   if (!is.null(metadata) && !is.null(color_by) && color_by %in% colnames(metadata)) {
-    # Get original sample names (before formatting)
     formatted_names <- rownames(sampleDistMatrix)
     original_names <- tolower(gsub(" ", "_", formatted_names))
     
     ann_colors <- metadata[, c("sample_id", color_by), drop = FALSE]
     rownames(ann_colors) <- ann_colors$sample_id
     
-    # Match original names to metadata
     common_samples <- intersect(original_names, ann_colors$sample_id)
     if (length(common_samples) > 0) {
-      # Create a mapping to maintain order
       sample_order <- match(original_names, common_samples)
       sample_order <- sample_order[!is.na(sample_order)]
       
-      # Reorder to match distance matrix order
       ann_colors_ordered <- ann_colors[common_samples[sample_order], , drop = FALSE]
       row_side_colors <- data.frame(ann_colors_ordered[, color_by, drop = FALSE])
       colnames(row_side_colors) <- stringr::str_to_title(gsub("_", " ", color_by))
       
-      # Use formatted names for display (should match dist_matrix rownames)
       rownames(row_side_colors) <- formatted_names[original_names %in% common_samples]
       
-      # Create named color palette for side colors
       unique_vals <- unique(row_side_colors[[stringr::str_to_title(gsub("_", " ", color_by))]])
       n_colors <- length(unique_vals)
       
-      # Generate colors
       if (n_colors <= 8) {
         base_colors <- RColorBrewer::brewer.pal(max(3, n_colors), sidebar_color_scheme)
       } else {
@@ -1023,7 +926,6 @@ plot_sample_distance_heatmap <- function(dist_matrix,
     }
   }
   
-  # Select color scheme
   selected_colors <- c()
   if (length(heatmap_color_scheme) == 1) {
     if (heatmap_color_scheme == "viridis") {
@@ -1045,7 +947,6 @@ plot_sample_distance_heatmap <- function(dist_matrix,
     } else if (heatmap_color_scheme == "RdYlBu") {
       selected_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "RdYlBu")))(256)
     } else {
-      # Try as RColorBrewer palette
       tryCatch({
         selected_colors <- colorRampPalette(RColorBrewer::brewer.pal(9, heatmap_color_scheme))(256)
       }, error = function(e) {
@@ -1057,7 +958,6 @@ plot_sample_distance_heatmap <- function(dist_matrix,
   }
   
   if (tolower(plot_type) == "heatmaply") {
-    # Create heatmaply plot
     p <- heatmaply::heatmaply(
       sampleDistMatrix,
       colors = selected_colors,
@@ -1079,7 +979,6 @@ plot_sample_distance_heatmap <- function(dist_matrix,
       colorbar_len = colorbar_len
     )
     
-    # Enhance layout
     p <- p %>% plotly::layout(
       xaxis = list(title = xlab),
       yaxis = list(title = ylab),
@@ -1102,12 +1001,10 @@ plot_sample_distance_heatmap <- function(dist_matrix,
     
   } else if (tolower(plot_type) == "ggplot") {
     
-    # Perform hierarchical clustering if dendrograms are requested
     hc_row <- NULL
     hc_col <- NULL
     
     if (show_dendrogram[1] || show_dendrogram[2]) {
-      # Convert to matrix for clustering
       dist_mat <- as.matrix(sampleDistMatrix)
       
       if (show_dendrogram[1]) {
@@ -1118,11 +1015,9 @@ plot_sample_distance_heatmap <- function(dist_matrix,
       }
     }
     
-    # Melt the distance matrix for ggplot
     dist_melt <- reshape2::melt(as.matrix(sampleDistMatrix))
     colnames(dist_melt) <- c("Sample1", "Sample2", "Distance")
     
-    # Reorder based on clustering if dendrograms are shown
     if (!is.null(hc_row)) {
       dist_melt$Sample1 <- factor(dist_melt$Sample1, 
                                   levels = rownames(sampleDistMatrix)[hc_row$order])
@@ -1139,7 +1034,6 @@ plot_sample_distance_heatmap <- function(dist_matrix,
                                   levels = colnames(sampleDistMatrix))
     }
     
-    # Create the ggplot
     p <- ggplot2::ggplot(dist_melt, ggplot2::aes(x = Sample2, y = Sample1, fill = Distance)) +
       ggplot2::geom_tile(color = "white", linewidth = 0.5) +
       ggplot2::scale_fill_gradientn(colors = selected_colors, name = legend_title) +
@@ -1161,7 +1055,6 @@ plot_sample_distance_heatmap <- function(dist_matrix,
         axis.title.y = ggplot2::element_text(size = 12, face = "bold")
       )
     
-    # Handle tick label visibility
     if (!show_tick_labels[2]) {
       p <- p + ggplot2::theme(axis.text.y = ggplot2::element_blank(),
                               axis.ticks.y = ggplot2::element_blank())
@@ -1190,68 +1083,16 @@ prepare_gene_expression_matrix <- function(counts,
     gene_data <- counts[rownames(counts) %in% gene_list, ]
   }
   
-  # Remove samples if specified
   if (!is.null(remove_samples) && length(remove_samples) > 0) {
     keep_cols <- setdiff(colnames(gene_data), remove_samples)
     gene_data <- gene_data[, keep_cols, drop = FALSE]
   }
   
-  # Prepare expression matrix
   expr_matrix <- as.matrix(gene_data)
   
   expr_matrix[is.na(expr_matrix)] <- 0
   
   return(expr_matrix)
-}
-
-apply_vst <- function(counts, metadata) {
-  
-  # Extract numeric count columns
-  if ("gene_id" %in% colnames(counts) || "gene_name" %in% colnames(counts)) {
-    gene_cols <- intersect(colnames(counts), c("gene_id", "gene_name"))
-    count_matrix <- as.matrix(counts[, !colnames(counts) %in% gene_cols, drop = FALSE])
-    
-    if ("gene_name" %in% colnames(counts)) {
-      rownames(count_matrix) <- counts$gene_name
-    } else if ("gene_id" %in% colnames(counts)) {
-      rownames(count_matrix) <- counts$gene_id
-    }
-  } else {
-    count_matrix <- as.matrix(counts)
-  }
-  
-  # Remove samples not in metadata if metadata provided
-  if (!is.null(metadata)) {
-    common_samples <- intersect(colnames(count_matrix), metadata$sample_id)
-    count_matrix <- count_matrix[, common_samples, drop = FALSE]
-  }
-  
-  # Create minimal colData
-  coldata_minimal <- data.frame(
-    row.names = colnames(count_matrix),
-    condition = rep("sample", ncol(count_matrix))
-  )
-  
-  # Create DESeqDataSet from full dataset
-  dds <- DESeqDataSetFromMatrix(
-    countData = round(count_matrix),
-    colData = coldata_minimal,
-    design = ~ 1
-  )
-  
-  # Apply VST to full dataset
-  vsd <- vst(dds, blind = TRUE)
-  vst_matrix <- as.data.frame(assay(vsd), stringsAsFactors = FALSE)
-  
-  # Add back gene_id/gene_name columns if they existed
-  if ("gene_name" %in% colnames(counts)) {
-    vst_matrix$gene_name <- rownames(vst_matrix)
-    vst_matrix$gene_id <- counts$gene_id[match(rownames(vst_matrix), counts$gene_name)]
-  } else if ("gene_id" %in% colnames(counts)) {
-    vst_matrix$gene_id <- rownames(vst_matrix)
-  }
-  
-  return(vst_matrix)
 }
 
 plot_gene_expression_heatmap <- function(counts,
@@ -1276,12 +1117,9 @@ plot_gene_expression_heatmap <- function(counts,
                                          heatmap_type = "heatmaply",
                                          vst_data = NULL) { 
   
-  # Extract expression data for selected genes and samples
   if ("gene_id" %in% colnames(counts) || "gene_name" %in% colnames(counts)) {
-    # If counts has gene_id/gene_name columns
     gene_cols <- intersect(colnames(counts), c("gene_id", "gene_name"))
     
-    # Use VST data if provided, otherwise use raw counts
     data_to_use <- if (!is.null(vst_data)) vst_data else counts
     
     dat <- data_to_use[data_to_use$gene_name %in% gene_list | data_to_use$gene_id %in% gene_list, 
@@ -1292,17 +1130,14 @@ plot_gene_expression_heatmap <- function(counts,
       data_to_use$gene_id[data_to_use$gene_name %in% gene_list | data_to_use$gene_id %in% gene_list]
     }
   } else {
-    # If counts is already a matrix with gene names as rownames
     data_to_use <- if (!is.null(vst_data)) vst_data else counts
     dat <- data_to_use[rownames(data_to_use) %in% gene_list, sample_list, drop = FALSE]
   }
   
-  # Remove genes with zero variance
   gene_sd <- apply(dat, 1, sd, na.rm = TRUE)
   dat <- dat[gene_sd != 0, , drop = FALSE]
   gene_list_filtered <- rownames(dat)
   
-  # Setup column side colors (sample metadata)
   col_side_colors <- NULL
   col_side_palette <- NULL
   
@@ -1311,7 +1146,6 @@ plot_gene_expression_heatmap <- function(counts,
     rownames(col_side_colors) <- sample_list
     colnames(col_side_colors) <- color_by
     
-    # Create named color palette for side colors
     unique_vals <- unique(col_side_colors[[color_by]])
     n_colors <- length(unique_vals)
     col_side_palette <- setNames(
@@ -1320,7 +1154,6 @@ plot_gene_expression_heatmap <- function(counts,
     )
   }
   
-  # Create gene annotations for hover text
   gene_annotation_columns <- c("gene_name", "gene_id", "gene_biotype")
   available_cols <- intersect(gene_annotation_columns, colnames(gene_annotations))
   
@@ -1328,13 +1161,11 @@ plot_gene_expression_heatmap <- function(counts,
     dat_annotation <- gene_annotations[match(gene_list_filtered, gene_annotations$gene_name), 
                                        available_cols, drop = FALSE]
     if (nrow(dat_annotation) == 0 || all(is.na(dat_annotation$gene_name))) {
-      # Try matching by gene_id if gene_name didn't work
       dat_annotation <- gene_annotations[match(gene_list_filtered, gene_annotations$gene_id), 
                                          available_cols, drop = FALSE]
     }
     rownames(dat_annotation) <- gene_list_filtered
     
-    # Create hover text
     hover_text <- sapply(sample_list, function(sid) {
       paste0("<b><i>", dat_annotation$gene_name, "</i></b><br>", 
              "<b>Sample: </b>", sid, "<br>",
@@ -1348,7 +1179,6 @@ plot_gene_expression_heatmap <- function(counts,
     hover_text <- NULL
   }
   
-  # Convert dendrogram and cluster settings
   show_rowv <- cluster %in% c("row", "both")
   show_colv <- cluster %in% c("column", "both")
   
@@ -1366,7 +1196,6 @@ plot_gene_expression_heatmap <- function(counts,
     show_colv <- TRUE
   }
   
-  # Convert show_names to tick labels
   if (show_names == "none") {
     show_tick_labels <- c(FALSE, FALSE)
   } else if (show_names == "column" || show_names == "x") {
@@ -1379,17 +1208,14 @@ plot_gene_expression_heatmap <- function(counts,
   
   # Convert scaling parameter
   scale_param <- if (tolower(scaling) %in% c("row", "z-score")) "row" 
-  else if (tolower(scaling) == "column") "column" 
-  else if (tolower(scaling) == "log") "none"  # Log handled separately
+  else if (tolower(scaling) == "log") "none"
   else "none"
   
-  # Apply log transformation if needed (heatmaply doesn't have built-in log)
   if (tolower(scaling) == "log") {
     dat <- log2(dat + 1)
     scale_param <- "none"
   }
   
-  # Select color scheme
   selected_colors <- c()
   if (length(heatmap_color_scheme) == 1) {
     if (heatmap_color_scheme == "viridis") {
@@ -1411,7 +1237,6 @@ plot_gene_expression_heatmap <- function(counts,
     } else if (heatmap_color_scheme == "RdYlBu") {
       heatmap_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "RdYlBu")))(256)
     } else {
-      # Try as RColorBrewer palette
       tryCatch({
         heatmap_colors <- colorRampPalette(RColorBrewer::brewer.pal(9, heatmap_color_scheme))(256)
       }, error = function(e) {
@@ -1423,7 +1248,6 @@ plot_gene_expression_heatmap <- function(counts,
   }
   
   if (tolower(heatmap_type) == "heatmaply") {
-    # Use heatmaply (plotly interactive)
     hm <- heatmaply::heatmaply(
       dat,
       colors = heatmap_colors,
@@ -1445,8 +1269,8 @@ plot_gene_expression_heatmap <- function(counts,
       Rowv = ifelse(nrow(dat) == 1, FALSE, show_rowv),
       Colv = ifelse(ncol(dat) == 1, FALSE, show_colv),
       scale = scale_param,
-      width = 900,
-      height = 700
+      width = 1500,
+      height = 1000
     )
     
     hm <- hm %>% plotly::layout(
@@ -1467,7 +1291,6 @@ plot_gene_expression_heatmap <- function(counts,
     return(hm)
     
   } else if (tolower(heatmap_type) == "ggheatmap" || tolower(heatmap_type) == "ggplot") {
-    # Use ggheatmap (static ggplot)
     p_heatmap <- heatmaply::ggheatmap(
       dat,
       xlab = xlab,
