@@ -58,9 +58,9 @@ fact_var = "condition"
 
 
 #------------------- Heatmap specific variables ------------------- 
-sample_distance_scaling_list = c("None" = "none", "Row" = "row", "Column" = "column", "Log scale" = "log", "Normalized(vst)" = "vst")
+sample_distance_scaling_list = c("None" = "none", "Row" = "row", "Column" = "column", "Log scale" = "log")
 
-gene_expression_scaling_list = c("None" = "none", "Row" = "row", "Column" = "column", "Log scale" = "log")
+gene_expression_scaling_list = c("None" = "none", "Row" = "row", "Log scale" = "log")
 
 dendrogram_list = c("None" = "none", "Row" = "row", "Column" = "column", "Both" = "both")
 
