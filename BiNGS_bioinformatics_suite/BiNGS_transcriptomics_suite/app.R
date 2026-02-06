@@ -38,7 +38,7 @@ ui <- fluidPage(
              fluidRow(
                column(6,
                       br(),
-                      fileInput("counts_csv", "Select gene counts file to import", accept = ".csv"),
+                      fileInput("counts_csv", HTML("Select <strong>normalized</strong> gene counts file to import"), accept = ".csv"),
                       fileInput("metadata_csv", "Select metadata file to import", accept = ".csv")
                ),
                column(6,
@@ -120,9 +120,9 @@ ui <- fluidPage(
                       br(),
                       br(),
                       conditionalPanel("input.PCA_Plot_type == 'plotly'",
-                                       plotlyOutput("pca_plotly", height = "600px")),
+                                       plotlyOutput("pca_plotly", height = "900px", width = "1200px")),
                       conditionalPanel("input.PCA_Plot_type == 'ggplot'",
-                                       plotOutput("pca_ggplot", height = "600px"))
+                                       plotOutput("pca_ggplot", height = "900px", width = "1200px"))
                ),
              )
     ),
@@ -243,7 +243,7 @@ ui <- fluidPage(
                       radioButtons("sample_distance_heatmap_scaling_type",
                                    "Select the type of scaling to perform:",
                                    choices = as.list(sample_distance_scaling_list),
-                                   selected = sample_distance_scaling_list[[5]]),
+                                   selected = sample_distance_scaling_list[[1]]),
                       radioButtons("sample_distance_heatmap_dendrogram_list",
                                    "Select the type of clustering to perform:",
                                    choices = as.list(dendrogram_list),
@@ -264,11 +264,11 @@ ui <- fluidPage(
                       br(),
                       conditionalPanel(
                         "input.Sample_Distance_Heatmap_Plot_type == 'ggplot'",
-                        plotOutput("sample_distance_heatmap", height = "700px", width = "1000px")
+                        plotOutput("sample_distance_heatmap", height = "900px", width = "1200px")
                       ),
                       conditionalPanel(
                         "input.Sample_Distance_Heatmap_Plot_type == 'heatmaply'",
-                        plotlyOutput("sample_distance_heatmaply", height = "700px", width = "1000px")
+                        plotlyOutput("sample_distance_heatmaply", height = "900px", width = "1200px")
                       ))
              )
     ),
@@ -351,11 +351,11 @@ ui <- fluidPage(
                       br(),
                       conditionalPanel(
                         "input.gene_heatmap_plot_type == 'ggplot'",
-                        plotOutput("gene_expression_heatmap_ggplot", height = "700px")
+                        plotOutput("gene_expression_heatmap_ggplot"), height = "900px", width = "1200px"
                       ),
                       conditionalPanel(
                         "input.gene_heatmap_plot_type == 'heatmaply'",
-                        plotlyOutput("gene_expression_heatmap_heatmaply", height = "700px")
+                        plotlyOutput("gene_expression_heatmap_heatmaply"), height = "900px", width = "1200px"
                       )
                )
              )
@@ -391,6 +391,58 @@ server <- function(input, output, session) {
     formatted_metadata$sample_id <- make.names(formatted_metadata$sample_id)
     return(formatted_metadata)
   })
+  
+  # Check if counts are normalized (floats) or raw (integers)
+  counts_are_normalized <- reactive({
+    req(count_data())
+    
+    gene_cols <- intersect(colnames(count_data()), c("gene_id", "gene_name"))
+    sample_cols <- setdiff(colnames(count_data()), gene_cols)
+    
+    mat <- suppressWarnings(
+      as.matrix(count_data()[, sample_cols, drop = FALSE])
+    )
+    
+    storage.mode(mat) <- "double"
+    vals <- mat[!is.na(mat)]
+    
+    if (length(vals) == 0) return(TRUE)
+    
+    # Heuristics for raw counts
+    looks_integer <- all(abs(vals - round(vals)) < 1e-8)
+    has_large_range <- max(vals) > 100
+    has_many_zeros <- mean(vals == 0) > 0.1
+    
+    # Raw counts if ALL are true
+    !(looks_integer && has_large_range && has_many_zeros)
+  })
+  
+  # Display warning if raw counts detected
+  observeEvent(input$counts_csv, {
+    req(count_data())
+    
+    is_norm <- counts_are_normalized()
+    
+    if (isFALSE(is_norm)) {
+      showModal(modalDialog(
+        title = tags$div(
+          style = "color: #d9534f;",
+          icon("exclamation-triangle"),
+          " Raw Counts Detected"
+        ),
+        tags$p("The uploaded count matrix contains integer raw counts."),
+        tags$p("This application expects normalized values."),
+        tags$p(
+          style = "font-weight: bold;",
+          "PCA and distance metrics may be misleading."
+        ),
+        easyClose = TRUE,
+        footer = modalButton("I understand")
+      ))
+    }
+  })
+  
+  
   
   # --- Sync sample removal across all tabs ---
   removed_samples <- reactiveVal(NULL)
@@ -726,7 +778,6 @@ server <- function(input, output, session) {
   
   vst_data <- reactive({
     req(count_data(), sample_metadata())
-    apply_vst(count_data(), sample_metadata())
   })
   
   # Update gene list choices when count data loads
