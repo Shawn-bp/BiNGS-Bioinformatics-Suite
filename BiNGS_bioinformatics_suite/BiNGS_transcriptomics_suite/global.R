@@ -880,7 +880,6 @@ plot_sample_distance_heatmap <- function(dist_matrix,
                                          xlab = "",
                                          ylab = "",
                                          column_text_angle = 45,
-                                         legend_title = "Euclidean\nsample\ndistance",
                                          cex_row = 1,
                                          cex_col = 1,
                                          show_dendrogram = c(TRUE, TRUE),
@@ -888,7 +887,9 @@ plot_sample_distance_heatmap <- function(dist_matrix,
                                          colorbar_xpos = 1.02,
                                          colorbar_ypos = 0.5,
                                          show_tick_labels = c(TRUE, TRUE),
-                                         colorbar_len = 0.4) {
+                                         colorbar_len = 0.4,
+                                         legend_x,
+                                         legend_y) {
   
   sampleDistMatrix <- dist_matrix
   
@@ -965,7 +966,7 @@ plot_sample_distance_heatmap <- function(dist_matrix,
       ylab = ylab,
       main = heatmap_title,
       column_text_angle = column_text_angle,
-      key.title = legend_title,
+      key.title = "Euclidean\nsample\ndistance",
       cexRow = cex_row,
       cexCol = cex_col,
       Rowv = show_dendrogram[1],
@@ -976,22 +977,10 @@ plot_sample_distance_heatmap <- function(dist_matrix,
       colorbar_xpos = colorbar_xpos,
       colorbar_ypos = colorbar_ypos,
       showticklabels = show_tick_labels,
-      colorbar_len = colorbar_len
-    )
-    
-    p <- p %>% plotly::layout(
-      xaxis = list(title = xlab),
-      yaxis = list(title = ylab),
-      legend = list(
-        orientation = "v",
-        x = 1.15,
-        y = 0.5,
-        xanchor = "left",
-        yanchor = "middle",
-        bgcolor = 'rgba(255,255,255,0.9)',
-        bordercolor = '#636363',
-        borderwidth = 1
-      )
+      colorbar_len = colorbar_len,
+      side_color_colorbar_len = 0.25,
+      width = 1500,
+      height =1000
     )
     
     if (exists("configure_plotly_panel")) {
@@ -1104,7 +1093,7 @@ plot_gene_expression_heatmap <- function(counts,
                                          sidebar_color_scheme = "Set1",
                                          heatmap_title = "Gene Expression Heatmap",
                                          heatmap_color_scheme = "RdYlBu",
-                                         xlab = "",
+                                         xlab = "Samples",
                                          ylab = "Genes",
                                          column_text_angle = 90,
                                          legend_title = "Expression",
@@ -1115,7 +1104,10 @@ plot_gene_expression_heatmap <- function(counts,
                                          scaling = "none",
                                          show_names = "both",
                                          heatmap_type = "heatmaply",
-                                         vst_data = NULL) { 
+                                         vst_data = NULL,
+                                         colorbar_xpos = 1.02,
+                                         colorbar_ypos = 0.5,
+                                         colorbar_len = 0.3) { 
   
   if ("gene_id" %in% colnames(counts) || "gene_name" %in% colnames(counts)) {
     gene_cols <- intersect(colnames(counts), c("gene_id", "gene_name"))
@@ -1264,27 +1256,15 @@ plot_gene_expression_heatmap <- function(counts,
       col_side_palette = col_side_palette,
       plot_method = "plotly",
       showticklabels = show_tick_labels,
+      colorbar_xpos = 1.02,
+      colorbar_ypos = 0.5,  
       colorbar_len = 0.3,
-      side_color_colorbar_len = 0.25,
+      side_color_colorbar_len = 0.2,
       Rowv = ifelse(nrow(dat) == 1, FALSE, show_rowv),
       Colv = ifelse(ncol(dat) == 1, FALSE, show_colv),
       scale = scale_param,
       width = 1500,
       height = 1000
-    )
-    
-    hm <- hm %>% plotly::layout(
-      legend = list(
-        orientation = "v",
-        x = 1.15,
-        y = 0.5,
-        xanchor = "left",
-        yanchor = "middle",
-        bgcolor = 'rgba(255,255,255,0.9)',
-        bordercolor = '#636363',
-        borderwidth = 1,
-        tracegroupgap = 10
-      )
     )
     
     hm <- configure_plotly_panel(hm, exportFormat = "svg")
