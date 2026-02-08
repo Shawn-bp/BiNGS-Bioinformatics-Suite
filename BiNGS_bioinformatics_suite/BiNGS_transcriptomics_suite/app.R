@@ -193,9 +193,9 @@ ui <- fluidPage(
                       br(),
                       br(),
                       conditionalPanel(condition = "input.Boxplot_Plot_type == 'plotly'",
-                                       plotlyOutput("boxplot_plotly")),
+                                       plotlyOutput("boxplot_plotly"), width = "1200px"),
                       conditionalPanel(condition = "input.Boxplot_Plot_type == 'ggplot'",
-                                       plotOutput("boxplot_ggplot")),
+                                       plotOutput("boxplot_ggplot"), width = "1200px"),
                       h3("P-value Table"),
                       DT::dataTableOutput("table_p"),
                       h3("ANOVA Table"),
@@ -444,101 +444,91 @@ server <- function(input, output, session) {
   
   
   
-  # --- Sync sample removal across all tabs ---
-  removed_samples <- reactiveVal(NULL)
-  updating_samples <- reactiveVal(FALSE)  # Flag to prevent loops
+  # --- Sync sample removal ---
+  
+  # Create a reactive value to store the current selection
+  samples_to_remove <- reactiveVal(character(0))
+  
+  # Flag to prevent circular updates
+  updating <- reactiveVal(FALSE)
   
   # Update all sample removal dropdowns when data loads
   observeEvent(count_data(), {
     sample_choices <- colnames(count_data())
     sample_choices <- sample_choices[!sample_choices %in% c("gene_id", "gene_name")]
     
-    updating_samples(TRUE)  # Set flag before updating
+    # Reset the reactive value
+    samples_to_remove(character(0))
     
+    updating(TRUE)
+    # Update all dropdowns with new choices and clear selection
     updateSelectizeInput(session, "pca_samples_to_remove", 
                          choices = sample_choices, 
-                         selected = removed_samples(),
+                         selected = character(0),
                          server = TRUE)
     updateSelectizeInput(session, "boxplot_samples_to_remove", 
                          choices = sample_choices, 
-                         selected = removed_samples(),
+                         selected = character(0),
                          server = TRUE)
     updateSelectizeInput(session, "sample_distance_samples_to_remove", 
                          choices = sample_choices, 
-                         selected = removed_samples(),
+                         selected = character(0),
                          server = TRUE)
     updateSelectizeInput(session, "samples_to_remove_select", 
                          choices = sample_choices, 
-                         selected = removed_samples(),
+                         selected = character(0),
                          server = TRUE)
-    
-    updating_samples(FALSE)  # Reset flag after updating
+    updating(FALSE)
   })
   
-  # Debounced version of each input to slow down rapid changes
-  pca_samples_debounced <- reactive({
-    input$pca_samples_to_remove
-  }) %>% debounce(500)  # Wait 500ms after user stops selecting
+  # Sync from PCA to reactive value
+  observeEvent(input$pca_samples_to_remove, {
+    if (!updating()) {
+      samples_to_remove(input$pca_samples_to_remove %||% character(0))
+    }
+  }, ignoreNULL = FALSE)
   
-  boxplot_samples_debounced <- reactive({
-    input$boxplot_samples_to_remove
-  }) %>% debounce(500)
+  # Sync from Boxplot to reactive value
+  observeEvent(input$boxplot_samples_to_remove, {
+    if (!updating()) {
+      samples_to_remove(input$boxplot_samples_to_remove %||% character(0))
+    }
+  }, ignoreNULL = FALSE)
   
-  distance_samples_debounced <- reactive({
-    input$sample_distance_samples_to_remove
-  }) %>% debounce(500)
+  # Sync from Sample Distance to reactive value
+  observeEvent(input$sample_distance_samples_to_remove, {
+    if (!updating()) {
+      samples_to_remove(input$sample_distance_samples_to_remove %||% character(0))
+    }
+  }, ignoreNULL = FALSE)
   
-  heatmap_samples_debounced <- reactive({
-    input$samples_to_remove_select
-  }) %>% debounce(500)
+  # Sync from Gene Expression Heatmap to reactive value
+  observeEvent(input$samples_to_remove_select, {
+    if (!updating()) {
+      samples_to_remove(input$samples_to_remove_select %||% character(0))
+    }
+  }, ignoreNULL = FALSE)
   
-  # Sync PCA removal to all other tabs
-  observeEvent(pca_samples_debounced(), {
-    if (updating_samples()) return()  # Skip if currently updating
+  # Sync FROM reactive value TO all inputs
+  observeEvent(samples_to_remove(), {
+    current <- samples_to_remove()
     
-    updating_samples(TRUE)
-    removed_samples(pca_samples_debounced())
-    updateSelectizeInput(session, "boxplot_samples_to_remove", selected = pca_samples_debounced())
-    updateSelectizeInput(session, "sample_distance_samples_to_remove", selected = pca_samples_debounced())
-    updateSelectizeInput(session, "samples_to_remove_select", selected = pca_samples_debounced())
-    updating_samples(FALSE)
-  }, ignoreNULL = FALSE, ignoreInit = TRUE)
-  
-  # Sync Boxplot removal to all other tabs
-  observeEvent(boxplot_samples_debounced(), {
-    if (updating_samples()) return()
-    
-    updating_samples(TRUE)
-    removed_samples(boxplot_samples_debounced())
-    updateSelectizeInput(session, "pca_samples_to_remove", selected = boxplot_samples_debounced())
-    updateSelectizeInput(session, "sample_distance_samples_to_remove", selected = boxplot_samples_debounced())
-    updateSelectizeInput(session, "samples_to_remove_select", selected = boxplot_samples_debounced())
-    updating_samples(FALSE)
-  }, ignoreNULL = FALSE, ignoreInit = TRUE)
-  
-  # Sync Sample Distance removal to all other tabs
-  observeEvent(distance_samples_debounced(), {
-    if (updating_samples()) return()
-    
-    updating_samples(TRUE)
-    removed_samples(distance_samples_debounced())
-    updateSelectizeInput(session, "pca_samples_to_remove", selected = distance_samples_debounced())
-    updateSelectizeInput(session, "boxplot_samples_to_remove", selected = distance_samples_debounced())
-    updateSelectizeInput(session, "samples_to_remove_select", selected = distance_samples_debounced())
-    updating_samples(FALSE)
-  }, ignoreNULL = FALSE, ignoreInit = TRUE)
-  
-  # Sync Gene Expression Heatmap removal to all other tabs
-  observeEvent(heatmap_samples_debounced(), {
-    if (updating_samples()) return()
-    
-    updating_samples(TRUE)
-    removed_samples(heatmap_samples_debounced())
-    updateSelectizeInput(session, "pca_samples_to_remove", selected = heatmap_samples_debounced())
-    updateSelectizeInput(session, "boxplot_samples_to_remove", selected = heatmap_samples_debounced())
-    updateSelectizeInput(session, "sample_distance_samples_to_remove", selected = heatmap_samples_debounced())
-    updating_samples(FALSE)
-  }, ignoreNULL = FALSE, ignoreInit = TRUE)
+    updating(TRUE)
+    # Update all inputs to match the reactive value
+    if (!identical(current, input$pca_samples_to_remove)) {
+      updateSelectizeInput(session, "pca_samples_to_remove", selected = current)
+    }
+    if (!identical(current, input$boxplot_samples_to_remove)) {
+      updateSelectizeInput(session, "boxplot_samples_to_remove", selected = current)
+    }
+    if (!identical(current, input$sample_distance_samples_to_remove)) {
+      updateSelectizeInput(session, "sample_distance_samples_to_remove", selected = current)
+    }
+    if (!identical(current, input$samples_to_remove_select)) {
+      updateSelectizeInput(session, "samples_to_remove_select", selected = current)
+    }
+    updating(FALSE)
+  }, ignoreNULL = FALSE)
   
   # ---------------- PCA ----------------
   pca_res <- reactive({
@@ -758,9 +748,8 @@ server <- function(input, output, session) {
         input$sample_distance_heatmap_show_names %in% c("x", "both"),
         input$sample_distance_heatmap_show_names %in% c("y", "both")
       ),
-      colorbar_xpos = 1,
-      colorbar_ypos = 0.5,
-      colorbar_len = 0.4
+      colorbar_ypos = 0.65,
+      colorbar_len = 0.3,
     )
     return(hm)
   })
@@ -842,13 +831,13 @@ server <- function(input, output, session) {
     )
   }, ignoreNULL = FALSE)
   
-  # Render static ggplot heatmap
-  output$gene_expression_heatmap_ggplot <- renderPlot({
+  # Render interactive heatmaply
+  output$gene_expression_heatmap_heatmaply <- renderPlotly({
     req(gene_sample_lists_reactive(), vst_data())
     
     lists <- gene_sample_lists_reactive()
     
-    p <- plot_gene_expression_heatmap(
+    plot_gene_expression_heatmap(
       counts = count_data(),
       gene_list = lists$gene_list,
       gene_annotations = gene_annotations_reactive(),
@@ -868,11 +857,16 @@ server <- function(input, output, session) {
       cluster = input$gene_heatmap_clustering_type,
       dendrogram = input$gene_heatmap_dendrogram_list,
       show_names = input$gene_heatmap_show_names,
-      heatmap_type = "ggheatmap",
-      vst_data = vst_data()
+      heatmap_type = "heatmaply",
+      vst_data = vst_data(),
+      colorbar_xpos = 1.02,  
+      colorbar_ypos = 0.5,   
+      colorbar_len = 0.3,    
+      legend_x = 1.02,       
+      legend_y = 0.3    
     )
     print(p)
-  }, height = 700, width = 1000)
+  })
   
   # Render interactive heatmaply
   output$gene_expression_heatmap_heatmaply <- renderPlotly({
