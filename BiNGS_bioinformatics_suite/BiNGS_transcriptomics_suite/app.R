@@ -520,7 +520,7 @@ server <- function(input, output, session) {
     }
   }, ignoreNULL = FALSE, ignoreInit = TRUE)
   
-  # Sync FROM reactive value TO all inputs
+  # Sync from reactive value TO all inputs
   observeEvent(samples_to_remove(), {
     current <- samples_to_remove()
     
@@ -940,3 +940,4 @@ server <- function(input, output, session) {
   
 }
 shinyApp(ui = ui, server = server)
+
