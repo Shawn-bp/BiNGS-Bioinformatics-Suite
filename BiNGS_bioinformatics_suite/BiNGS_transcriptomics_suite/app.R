@@ -442,14 +442,8 @@ server <- function(input, output, session) {
     }
   })
   
-  
-  
-  # --- Sync sample removal ---
-  
-  # Create a reactive value to store the current selection
+  # --- Sync sample removal across all tabs ---
   samples_to_remove <- reactiveVal(character(0))
-  
-  # Flag to prevent circular updates
   updating <- reactiveVal(FALSE)
   
   # Update all sample removal dropdowns when data loads
@@ -481,33 +475,50 @@ server <- function(input, output, session) {
     updating(FALSE)
   })
   
+  # Debounced version of each input to slow down rapid changes
+  pca_samples_debounced <- reactive({
+    input$pca_samples_to_remove
+  }) %>% debounce(500)
+  
+  boxplot_samples_debounced <- reactive({
+    input$boxplot_samples_to_remove
+  }) %>% debounce(500)
+  
+  distance_samples_debounced <- reactive({
+    input$sample_distance_samples_to_remove
+  }) %>% debounce(500)
+  
+  heatmap_samples_debounced <- reactive({
+    input$samples_to_remove_select
+  }) %>% debounce(500)
+  
   # Sync from PCA to reactive value
-  observeEvent(input$pca_samples_to_remove, {
+  observeEvent(pca_samples_debounced(), {
     if (!updating()) {
-      samples_to_remove(input$pca_samples_to_remove %||% character(0))
+      samples_to_remove(pca_samples_debounced() %||% character(0))
     }
-  }, ignoreNULL = FALSE)
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
   
   # Sync from Boxplot to reactive value
-  observeEvent(input$boxplot_samples_to_remove, {
+  observeEvent(boxplot_samples_debounced(), {
     if (!updating()) {
-      samples_to_remove(input$boxplot_samples_to_remove %||% character(0))
+      samples_to_remove(boxplot_samples_debounced() %||% character(0))
     }
-  }, ignoreNULL = FALSE)
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
   
   # Sync from Sample Distance to reactive value
-  observeEvent(input$sample_distance_samples_to_remove, {
+  observeEvent(distance_samples_debounced(), {
     if (!updating()) {
-      samples_to_remove(input$sample_distance_samples_to_remove %||% character(0))
+      samples_to_remove(distance_samples_debounced() %||% character(0))
     }
-  }, ignoreNULL = FALSE)
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
   
   # Sync from Gene Expression Heatmap to reactive value
-  observeEvent(input$samples_to_remove_select, {
+  observeEvent(heatmap_samples_debounced(), {
     if (!updating()) {
-      samples_to_remove(input$samples_to_remove_select %||% character(0))
+      samples_to_remove(heatmap_samples_debounced() %||% character(0))
     }
-  }, ignoreNULL = FALSE)
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
   
   # Sync FROM reactive value TO all inputs
   observeEvent(samples_to_remove(), {
