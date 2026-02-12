@@ -351,7 +351,7 @@ ui <- fluidPage(
                       br(),
                       conditionalPanel(
                         "input.gene_heatmap_plot_type == 'ggplot'",
-                        plotOutput("gene_expression_heatmap_ggplot"), height = "900px", width = "1200px"
+                        plotOutput("gene_expression_heatmap_ggplot")
                       ),
                       conditionalPanel(
                         "input.gene_heatmap_plot_type == 'heatmaply'",
@@ -520,7 +520,7 @@ server <- function(input, output, session) {
     }
   }, ignoreNULL = FALSE, ignoreInit = TRUE)
   
-  # Sync from reactive value TO all inputs
+  # Sync reactive value to all inputs
   observeEvent(samples_to_remove(), {
     current <- samples_to_remove()
     
@@ -842,13 +842,14 @@ server <- function(input, output, session) {
     )
   }, ignoreNULL = FALSE)
   
-  # Render interactive heatmaply
-  output$gene_expression_heatmap_heatmaply <- renderPlotly({
+  # Render static ggplot heatmap
+  output$gene_expression_heatmap_ggplot <- renderPlot({
+    req(gene_sample_lists_reactive())
     req(gene_sample_lists_reactive(), vst_data())
     
     lists <- gene_sample_lists_reactive()
     
-    plot_gene_expression_heatmap(
+    p <- plot_gene_expression_heatmap(
       counts = count_data(),
       gene_list = lists$gene_list,
       gene_annotations = gene_annotations_reactive(),
@@ -868,16 +869,10 @@ server <- function(input, output, session) {
       cluster = input$gene_heatmap_clustering_type,
       dendrogram = input$gene_heatmap_dendrogram_list,
       show_names = input$gene_heatmap_show_names,
-      heatmap_type = "heatmaply",
-      vst_data = vst_data(),
-      colorbar_xpos = 1.02,  
-      colorbar_ypos = 0.5,   
-      colorbar_len = 0.3,    
-      legend_x = 1.02,       
-      legend_y = 0.3    
+      heatmap_type = "ggheatmap",
+      vst_data = vst_data()
     )
-    print(p)
-  })
+  }, height = 900, width = 1200)
   
   # Render interactive heatmaply
   output$gene_expression_heatmap_heatmaply <- renderPlotly({
@@ -940,4 +935,3 @@ server <- function(input, output, session) {
   
 }
 shinyApp(ui = ui, server = server)
-
