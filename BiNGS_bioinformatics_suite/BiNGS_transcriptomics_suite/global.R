@@ -1025,7 +1025,7 @@ plot_sample_distance_heatmap <- function(dist_matrix,
     
     p <- ggplot2::ggplot(dist_melt, ggplot2::aes(x = Sample2, y = Sample1, fill = Distance)) +
       ggplot2::geom_tile(color = "white", linewidth = 0.5) +
-      ggplot2::scale_fill_gradientn(colors = selected_colors, name = legend_title) +
+      ggplot2::scale_fill_gradientn(colors = selected_colors, name = "Euclidean\nsample\ndistance") +
       ggplot2::labs(title = heatmap_title, x = xlab, y = ylab) +
       ggplot2::theme_minimal() +
       ggplot2::theme(
