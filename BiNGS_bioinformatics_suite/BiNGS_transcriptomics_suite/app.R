@@ -698,18 +698,17 @@ server <- function(input, output, session) {
   })
   
   # ---- Reactive: compute distance matrix (updates immediately) ----
-  dist_matrix_reactive <- reactive({
+  dist_matrix_reactive <- eventReactive(input$sample_distance_run_button, {
     req(count_data(), sample_metadata())
     
     samples_remove <- input$sample_distance_samples_to_remove
     
-    # produce full dist matrix 
     run_sample_distance(
       counts = count_data(),
       metadata = sample_metadata(),
       remove_samples = samples_remove,
       scale_type = input$sample_distance_heatmap_scaling_type,
-      ntop = NULL
+      ntop = 500
     )
   })
   
