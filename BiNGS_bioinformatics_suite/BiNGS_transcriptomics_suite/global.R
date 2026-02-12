@@ -945,6 +945,8 @@ plot_sample_distance_heatmap <- function(dist_matrix,
       selected_colors <- viridis::mako(n = 256, alpha = 1, begin = 0, end = 1)
     } else if (heatmap_color_scheme == "turbo") {
       selected_colors <- viridis::turbo(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "RdBu") {
+      selected_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "RdBu")))(256)
     } else if (heatmap_color_scheme == "RdYlBu") {
       selected_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "RdYlBu")))(256)
     } else {
@@ -1226,6 +1228,8 @@ plot_gene_expression_heatmap <- function(counts,
       heatmap_colors <- viridis::mako(n = 256, alpha = 1, begin = 0, end = 1)
     } else if (heatmap_color_scheme == "turbo") {
       heatmap_colors <- viridis::turbo(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "RdBu") {
+      heatmap_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "RdBu")))(256)
     } else if (heatmap_color_scheme == "RdYlBu") {
       heatmap_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "RdYlBu")))(256)
     } else {
