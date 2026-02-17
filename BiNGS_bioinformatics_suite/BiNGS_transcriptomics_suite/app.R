@@ -775,10 +775,6 @@ server <- function(input, output, session) {
   
   # ------------------ GENE EXPRESSION HEATMAP ------------------
   
-  vst_data <- reactive({
-    req(count_data(), sample_metadata())
-  })
-  
   # Update gene list choices when count data loads
   observeEvent(count_data(), {
     gene_choices <- if ("gene_name" %in% colnames(count_data())) {
@@ -844,7 +840,6 @@ server <- function(input, output, session) {
   # Render static ggplot heatmap
   output$gene_expression_heatmap_ggplot <- renderPlot({
     req(gene_sample_lists_reactive())
-    req(gene_sample_lists_reactive(), vst_data())
     
     lists <- gene_sample_lists_reactive()
     
@@ -868,14 +863,13 @@ server <- function(input, output, session) {
       cluster = input$gene_heatmap_clustering_type,
       dendrogram = input$gene_heatmap_dendrogram_list,
       show_names = input$gene_heatmap_show_names,
-      heatmap_type = "ggheatmap",
-      vst_data = vst_data()
+      heatmap_type = "ggheatmap"
     )
   }, height = 900, width = 1200)
   
   # Render interactive heatmaply
   output$gene_expression_heatmap_heatmaply <- renderPlotly({
-    req(gene_sample_lists_reactive(), vst_data())
+    req(gene_sample_lists_reactive())
     
     lists <- gene_sample_lists_reactive()
     
@@ -899,8 +893,7 @@ server <- function(input, output, session) {
       cluster = input$gene_heatmap_clustering_type,
       dendrogram = input$gene_heatmap_dendrogram_list,
       show_names = input$gene_heatmap_show_names,
-      heatmap_type = "heatmaply",
-      vst_data = vst_data()
+      heatmap_type = "heatmaply"
     )
   })
   
@@ -910,22 +903,21 @@ server <- function(input, output, session) {
       paste0("gene_expression_heatmap_", input$gene_heatmap_scaling_type, "_", Sys.Date(), ".csv") 
     },
     content = function(file) {
-      req(gene_sample_lists_reactive(), vst_data())
+      req(gene_sample_lists_reactive())
       
       lists <- gene_sample_lists_reactive()
       
-      # Extract the VST-transformed data for selected genes
-      if ("gene_name" %in% colnames(vst_data())) {
-        expr_matrix <- vst_data()[vst_data()$gene_name %in% lists$gene_list, 
-                                  lists$sample_list, drop = FALSE]
-        rownames(expr_matrix) <- vst_data()$gene_name[vst_data()$gene_name %in% lists$gene_list]
-      } else if ("gene_id" %in% colnames(vst_data())) {
-        expr_matrix <- vst_data()[vst_data()$gene_id %in% lists$gene_list, 
-                                  lists$sample_list, drop = FALSE]
-        rownames(expr_matrix) <- vst_data()$gene_id[vst_data()$gene_id %in% lists$gene_list]
+      if ("gene_name" %in% colnames(count_data())) {
+        expr_matrix <- count_data()[count_data()$gene_name %in% lists$gene_list, 
+                                    lists$sample_list, drop = FALSE]
+        rownames(expr_matrix) <- count_data()$gene_name[count_data()$gene_name %in% lists$gene_list]
+      } else if ("gene_id" %in% colnames(count_data())) {
+        expr_matrix <- count_data()[count_data()$gene_id %in% lists$gene_list, 
+                                    lists$sample_list, drop = FALSE]
+        rownames(expr_matrix) <- count_data()$gene_id[count_data()$gene_id %in% lists$gene_list]
       } else {
-        expr_matrix <- vst_data()[rownames(vst_data()) %in% lists$gene_list, 
-                                  lists$sample_list, drop = FALSE]
+        expr_matrix <- count_data()[rownames(count_data()) %in% lists$gene_list, 
+                                    lists$sample_list, drop = FALSE]
       }
       
       write.csv(expr_matrix, file, row.names = TRUE)
