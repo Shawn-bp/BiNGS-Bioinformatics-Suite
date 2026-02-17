@@ -826,11 +826,9 @@ draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot
 }
 
 ## ------------------ SAMPLE DISTANCE HEATMAP ------------------
-
 run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, scale_type = "none", ntop = 500) {
   
   gene_cols <- intersect(colnames(counts), c("gene_id", "gene_name"))
-  
   sample_cols <- setdiff(colnames(counts), gene_cols)
   
   if (!is.null(remove_samples) && length(remove_samples) > 0) {
@@ -846,7 +844,17 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
     rownames(expr_matrix) <- counts$gene_id
   }
   
+  # STEP 1: Select top variable genes from the unscaled matrix.
+  rv <- rowVars(as.matrix(expr_matrix))
+  select <- order(rv, decreasing = TRUE)[seq_len(min(ntop, length(rv)))]
+  expr_matrix <- expr_matrix[select, , drop = FALSE]
+  
+  # Apply scaling after gene selection.
   if (scale_type == "row") {
+    # Z-score across samples for each gene (row). Genes with zero variance
+    # after subsetting are dropped to avoid NaN distances.
+    row_sds <- apply(expr_matrix, 1, sd, na.rm = TRUE)
+    expr_matrix <- expr_matrix[row_sds > 0, , drop = FALSE]
     expr_matrix <- t(scale(t(expr_matrix)))
   } else if (scale_type == "column") {
     expr_matrix <- scale(expr_matrix)
@@ -854,21 +862,14 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
     expr_matrix <- log10(expr_matrix + 1)
   }
   
-  rv <- rowVars(as.matrix(expr_matrix))
-  
-  select <- order(rv, decreasing = TRUE)
-  
-  sample_set <- colnames(expr_matrix)
-  sampleDists <- dist(t(as.matrix(expr_matrix[select, ])))
+  # Compute Euclidean distances between samples.
+  sampleDists <- dist(t(expr_matrix))
   sampleDistMatrix <- as.matrix(sampleDists)
-  rownames(sampleDistMatrix) <- sample_set
-  colnames(sampleDistMatrix) <- NULL
   
-  sampleDistMatrix2 <- as.data.frame(sampleDistMatrix)
-  rownames(sampleDistMatrix2) <- stringr::str_to_title(gsub("_", " ", rownames(sampleDistMatrix)))
-  colnames(sampleDistMatrix2) <- stringr::str_to_title(gsub("_", " ", rownames(sampleDistMatrix)))
+  rownames(sampleDistMatrix) <- sample_cols
+  colnames(sampleDistMatrix) <- sample_cols
   
-  return(sampleDistMatrix2)
+  return(as.data.frame(sampleDistMatrix))
 }
 
 plot_sample_distance_heatmap <- function(dist_matrix, 
@@ -892,29 +893,31 @@ plot_sample_distance_heatmap <- function(dist_matrix,
                                          legend_y) {
   
   sampleDistMatrix <- dist_matrix
+  original_ids <- rownames(sampleDistMatrix)
+  
+  # Build display labels for axis tick marks
+  display_labels <- stringr::str_to_title(gsub("_", " ", original_ids))
+  rownames(sampleDistMatrix) <- display_labels
+  colnames(sampleDistMatrix) <- display_labels
   
   row_side_colors <- NULL
   row_side_palette <- NULL
   
   if (!is.null(metadata) && !is.null(color_by) && color_by %in% colnames(metadata)) {
-    formatted_names <- rownames(sampleDistMatrix)
-    original_names <- tolower(gsub(" ", "_", formatted_names))
-    
+    # Match directly on the original (pre-formatting) sample IDs
     ann_colors <- metadata[, c("sample_id", color_by), drop = FALSE]
     rownames(ann_colors) <- ann_colors$sample_id
     
-    common_samples <- intersect(original_names, ann_colors$sample_id)
-    if (length(common_samples) > 0) {
-      sample_order <- match(original_names, common_samples)
-      sample_order <- sample_order[!is.na(sample_order)]
-      
-      ann_colors_ordered <- ann_colors[common_samples[sample_order], , drop = FALSE]
-      row_side_colors <- data.frame(ann_colors_ordered[, color_by, drop = FALSE])
+    matched_annotations <- ann_colors[original_ids, color_by, drop = FALSE]
+    
+    if (!all(is.na(matched_annotations[[color_by]]))) {
+      row_side_colors <- data.frame(matched_annotations[[color_by]], 
+                                    stringsAsFactors = FALSE)
       colnames(row_side_colors) <- stringr::str_to_title(gsub("_", " ", color_by))
+      rownames(row_side_colors) <- display_labels
       
-      rownames(row_side_colors) <- formatted_names[original_names %in% common_samples]
-      
-      unique_vals <- unique(row_side_colors[[stringr::str_to_title(gsub("_", " ", color_by))]])
+      unique_vals <- unique(row_side_colors[[1]])
+      unique_vals <- unique_vals[!is.na(unique_vals)]
       n_colors <- length(unique_vals)
       
       if (n_colors <= 8) {
@@ -923,7 +926,7 @@ plot_sample_distance_heatmap <- function(dist_matrix,
         base_colors <- colorRampPalette(RColorBrewer::brewer.pal(8, sidebar_color_scheme))(n_colors)
       }
       
-      row_side_palette <- setNames(base_colors[1:n_colors], unique_vals)
+      row_side_palette <- setNames(base_colors[seq_len(n_colors)], unique_vals)
     }
   }
   
@@ -982,7 +985,7 @@ plot_sample_distance_heatmap <- function(dist_matrix,
       colorbar_len = colorbar_len,
       side_color_colorbar_len = 0.25,
       width = 1500,
-      height =1000
+      height = 1000
     )
     
     if (exists("configure_plotly_panel")) {
@@ -1129,7 +1132,7 @@ plot_gene_expression_heatmap <- function(counts,
   }
   
   gene_sd <- apply(dat, 1, sd, na.rm = TRUE)
-  dat <- dat[gene_sd != 0, , drop = FALSE]
+  dat <- dat[!is.na(gene_sd) & gene_sd > 0, , drop = FALSE]
   gene_list_filtered <- rownames(dat)
   
   col_side_colors <- NULL
@@ -1199,16 +1202,34 @@ plot_gene_expression_heatmap <- function(counts,
   } else {
     show_tick_labels <- c(TRUE, TRUE)
   }
+  limits <- NULL
   
-  # Convert scaling parameter
-  scale_param <- if (tolower(scaling) %in% c("row", "z-score")) "row" 
-  else if (tolower(scaling) == "log") "none"
-  else "none"
-  
-  if (tolower(scaling) == "log") {
+  if (tolower(scaling) %in% c("row", "z-score")) {
+    dat <- as.matrix(dat)
+    storage.mode(dat) <- "double"
+    row_sds <- apply(dat, 1, sd, na.rm = TRUE)
+    dat <- dat[!is.na(row_sds) & row_sds > 0, , drop = FALSE]
+    dat <- t(scale(t(dat)))
+    dat <- matrix(as.numeric(dat),
+                  nrow = nrow(dat), ncol = ncol(dat),
+                  dimnames = dimnames(dat))
+    gene_list_filtered <- rownames(dat)
+    max_abs <- max(abs(dat), na.rm = TRUE)
+    limits  <- c(-max_abs, max_abs)
+    message("[Heatmap] Z-score range: [",
+            round(min(dat, na.rm = TRUE), 3), ", ",
+            round(max(dat, na.rm = TRUE), 3), "] — ",
+            sum(dat < 0, na.rm = TRUE), " negative values present")
+  } else if (tolower(scaling) == "log") {
+    dat <- as.matrix(dat)
+    storage.mode(dat) <- "double"
     dat <- log2(dat + 1)
-    scale_param <- "none"
+  } else {
+    if (!tolower(scaling) %in% c("none", "")) {
+      warning("Unrecognised scaling value '", scaling, "' — no scaling applied.")
+    }
   }
+  scale_param <- "none"
   
   selected_colors <- c()
   if (length(heatmap_color_scheme) == 1) {
@@ -1246,6 +1267,7 @@ plot_gene_expression_heatmap <- function(counts,
   if (tolower(heatmap_type) == "heatmaply") {
     hm <- heatmaply::heatmaply(
       dat,
+      limits = limits,
       colors = heatmap_colors,
       xlab = xlab,
       ylab = ylab,
