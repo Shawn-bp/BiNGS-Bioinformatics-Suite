@@ -1,3 +1,4 @@
+
 #------------------- PCA specific variables ------------------- 
 pca_color_palette_list = c(
   "Set1 (Bright reds/blues)" = "Set1",
@@ -60,7 +61,7 @@ fact_var = "condition"
 #------------------- Heatmap specific variables ------------------- 
 sample_distance_scaling_list = c("None" = "none", "Row" = "row", "Column" = "column", "Log scale" = "log")
 
-gene_expression_scaling_list = c("None" = "none", "Row" = "row", "Log scale" = "log")
+gene_expression_scaling_list <- c("None" = "none", "Z-score" = "z-score", "Log2" = "log")
 
 dendrogram_list = c("None" = "none", "Row" = "row", "Column" = "column", "Both" = "both")
 
