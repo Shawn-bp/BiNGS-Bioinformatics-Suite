@@ -13,6 +13,44 @@ pca_color_palette_list = c(
 
 pca_metadata_columns_to_remove = c("species", "strandedness", "alignment_bam", "fastq_1", "fastq_2", "fastq_1_trimmed", "fastq_2_trimmed", "bings_sample_id", "bings_case_id", "bings_patient_id","file_name", "bings_block_id")
 
+plotly_marker_symbols <- c(
+  # --- Filled ---
+  "circle", "square", "diamond", "triangle-up", "triangle-down",
+  "triangle-left", "triangle-right", "pentagon", "hexagon", "hexagon2",
+  "octagon", "star", "hexagram", "diamond-tall", "diamond-wide",
+  "star-triangle-up", "star-triangle-down", "star-square", "star-diamond",
+  "hourglass", "bowtie",
+  
+  # --- Filled with dot ---
+  "circle-dot", "square-dot", "diamond-dot", "triangle-up-dot",
+  "pentagon-dot", "hexagon-dot", "hexagon2-dot", "octagon-dot",
+  "star-dot", "hexagram-dot", "diamond-tall-dot", "diamond-wide-dot",
+  "hash-dot",
+  
+  # --- Diagonal triangles (filled) ---
+  "triangle-ne", "triangle-se", "triangle-sw", "triangle-nw",
+  
+  # --- Open variants  ---
+  "circle-open", "square-open", "diamond-open", "triangle-up-open",
+  "triangle-down-open", "triangle-left-open", "triangle-right-open",
+  "pentagon-open", "hexagon-open", "hexagon2-open", "octagon-open",
+  "star-open", "hexagram-open", "diamond-tall-open", "diamond-wide-open",
+  "star-triangle-up-open", "star-triangle-down-open",
+  "star-square-open", "star-diamond-open",
+  "hourglass-open", "bowtie-open",
+  
+  # --- Open with dot ---
+  "circle-open-dot", "square-open-dot", "diamond-open-dot",
+  "triangle-up-open-dot", "cross-open-dot", "x-open-dot",
+  
+  # --- Line/symbol shapes ---
+  "cross", "cross-open", "cross-dot",
+  "x", "x-open", "x-dot",
+  "asterisk", "hash", "hash-open",
+  "y-up", "y-up-open", "y-down", "y-down-open",
+  "y-left", "y-left-open", "y-right", "y-right-open",
+  "line-ew", "line-ns", "line-ne", "line-nw"
+)
 #------------------- General variables ------------------- 
 
 color_palette_list = c(
