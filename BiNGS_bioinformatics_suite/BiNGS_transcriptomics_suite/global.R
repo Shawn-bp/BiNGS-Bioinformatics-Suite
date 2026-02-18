@@ -1,928 +1,1373 @@
-# Install BiocManager
-if (!require("BiocManager", quietly = TRUE))
-  install.packages("BiocManager")
-
-# Install DESeq2
-BiocManager::install("DESeq2")
-
-# Install SummarizedExperiment
-BiocManager::install("SummarizedExperiment")
-
-require(shiny)
-require(shinythemes)
-require(data.table)
-require(ggplot2)
-require(dplyr)
-require(DT)
-require(plotly)
-require(fst)
-require(ggpubr)
-require(matrixStats)
-require(heatmaply)
-library(RColorBrewer)
-library(DESeq2)
-library(SummarizedExperiment)
-library(pheatmap)
-library(grid)
-library(gridExtra)
-source("helper.R")
-source("global.R")
-
-ui <- fluidPage(
-  titlePanel("BiNGS Transcriptomics Suite"),
+# ------------------ PCA ------------------
+run_pca <- function(counts, metadata, ntop = 500, remove_samples = NULL) {
   
-  tabsetPanel(
-    
-    # ------------------ UPLOAD TAB ------------------
-    tabPanel("Upload",
-             fluidRow(
-               column(6,
-                      br(),
-                      fileInput("counts_csv", HTML("Select <strong>normalized</strong> gene counts file to import"), accept = ".csv"),
-                      fileInput("metadata_csv", "Select metadata file to import", accept = ".csv")
-               ),
-               column(6,
-                      div(
-                        style = "text-align: center; 
-                             padding: 60px 40px; 
-                             background-color: #337ab7; 
-                             border-radius: 5px;
-                             margin: 20px;",
-                        img(src = "bings_logo_white.png", height = "80px")
-                      )
-               )
-             )
-    ),
-    
-    # ------------------ PCA TAB ------------------
-    tabPanel("PCA",
-             fluidRow(
-               column(3,
-                      br(),
-                      selectizeInput(
-                        'pca_samples_to_remove',
-                        label = "Select samples to remove:",
-                        choices = NULL,
-                        selected = NULL,
-                        options = list(
-                          `actions-box` = TRUE,
-                          placeholder = "Select samples to exclude"
-                        ),
-                        multiple = TRUE
-                      ),
-                      selectizeInput(
-                        'x_pc',
-                        label = "X axis PC",
-                        choices = NULL,
-                        selected = NULL, 
-                        options = list(`actions-box` = TRUE),
-                        multiple = FALSE
-                      ),
-                      selectizeInput(
-                        'y_pc',
-                        label = "Y axis PC",
-                        choices = NULL,
-                        selected = NULL, 
-                        options = list(`actions-box` = TRUE),
-                        multiple = FALSE
-                      ),
-                      selectizeInput(
-                        "color_var",
-                        label = "Color samples by:",
-                        choices = NULL,
-                        options = list(`actions-box` = TRUE),
-                        multiple = FALSE
-                      ),
-                      selectizeInput(
-                        "shape_var",
-                        label = "Change sample shapes by:",
-                        choices = NULL,
-                        options = list(`actions-box` = TRUE),
-                        multiple = FALSE
-                      ),
-                      radioButtons("pca_color_palette",
-                                   "Select the color palette to use:",
-                                   choices = as.list(pca_color_palette_list),
-                                   selected = pca_color_palette_list[[1]]),
-                      radioButtons("PCA_Plot_type",
-                                   "Interactive or static:",
-                                   choices = as.list(type_list),
-                                   selected = type_list[[1]]),
-                      actionButton("PCA_run_button", "Create PCA", 
-                                   style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
-                      br(), 
-                      br(), 
-                      br(),
-                      downloadButton("download_PCA", "Download_PCA_coords.csv")
-               ),
-               # ------------------ PCA outputs ------------------
-               column(9,
-                      br(),
-                      br(),
-                      conditionalPanel("input.PCA_Plot_type == 'plotly'",
-                                       plotlyOutput("pca_plotly", height = "900px", width = "1200px")),
-                      conditionalPanel("input.PCA_Plot_type == 'ggplot'",
-                                       plotOutput("pca_ggplot", height = "900px", width = "1200px"))
-               ),
-             )
-    ),
-    # ------------------ BOXPLOT TAB ------------------
-    tabPanel("Boxplot",
-             fluidRow(
-               column(3,
-                      br(),
-                      selectizeInput(
-                        'boxplot_samples_to_remove',
-                        label = "Select samples to remove:",
-                        choices = NULL,
-                        selected = NULL,
-                        options = list(
-                          `actions-box` = TRUE,
-                          placeholder = "Select samples to exclude"
-                        ),
-                        multiple = TRUE
-                      ),
-                      selectizeInput(
-                        'gene_var',
-                        label = "Select Gene:",
-                        choices = NULL,
-                        options = list(`actions-box` = TRUE),
-                        multiple = FALSE
-                      ),
-                      selectizeInput(
-                        'fact_var',
-                        label = "Sample groups",
-                        choices = NULL,
-                        selected = NULL, 
-                        options = list(`actions-box` = TRUE),
-                        multiple = FALSE
-                      ),
-                      radioButtons("boxplot_color_palette",
-                                   "Select the color palette to use:",
-                                   choices = as.list(color_palette_list),
-                                   selected = color_palette_list[[1]]),
-                      radioButtons("QC_check",
-                                   "Remove low quality samples:",
-                                   choices = as.list(QC_list),
-                                   selected = QC_list[[1]]),
-                      radioButtons("Log",
-                                   "Log expression:",
-                                   choices = as.list(Log_list),
-                                   selected = Log_list[[1]]),
-                      radioButtons("Boxplot_Plot_type",
-                                   "Interactive or static:",
-                                   choices = as.list(type_list),
-                                   selected = type_list[[1]]),
-                      radioButtons("Box_violin",
-                                   "Plot type:",
-                                   choices = as.list(box_plot_list),
-                                   selected = box_plot_list[[1]]),
-                      br(),
-                      actionButton("run_button", "Create Boxplot", 
-                                   style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
-                      br(), 
-                      br(), 
-                      br(),
-                      downloadButton("download_exp", "Download_expression.csv"),
-                      br(), 
-                      br(),
-                      downloadButton("download_pval", "Download_pvalue_table.csv"),
-               ),
-               # ------------------ BOXPLOT OUTPUTS ------------------
-               column(9,
-                      br(),
-                      br(),
-                      conditionalPanel(condition = "input.Boxplot_Plot_type == 'plotly'",
-                                       plotlyOutput("boxplot_plotly"), width = "1200px"),
-                      conditionalPanel(condition = "input.Boxplot_Plot_type == 'ggplot'",
-                                       plotOutput("boxplot_ggplot"), width = "1200px"),
-                      h3("P-value Table"),
-                      DT::dataTableOutput("table_p"),
-                      h3("ANOVA Table"),
-                      DT::dataTableOutput("table_panova"),
-                      h3("Gene Expression Table"),
-                      DT::dataTableOutput("table_data")
-               ),
-             )
-    ),
-    # ------------------ SAMPLE DISTANCE HEATMAP TAB ------------------
-    tabPanel("Sample Distance Heatmap",
-             fluidRow(
-               column(3,
-                      br(),
-                      selectizeInput(
-                        'sample_distance_samples_to_remove',
-                        label= "Select samples to remove:",
-                        choices= NULL,
-                        selected = NULL,
-                        options = list(
-                          `actions-box` = TRUE,
-                          placeholder= "Select samples to exclude"
-                        ),
-                        multiple = TRUE
-                      ),
-                      selectizeInput(
-                        'metadata_color_bars',
-                        label = "Select metadata field to color by:",
-                        choices = NULL,
-                        options = list(`actions-box` = TRUE),
-                        multiple = FALSE
-                      ),
-                      radioButtons("sample_distance_sidebar_color_palette",
-                                   "Sidebar color palette:",
-                                   choices = as.list(color_palette_list),
-                                   selected = color_palette_list[[2]]),
-                      radioButtons("sample_distance_heatmap_show_names",
-                                   "Show sample names:",
-                                   choices = as.list(sample_distance_show_names_list),
-                                   selected = sample_distance_show_names_list[[4]]),
-                      radioButtons("sample_distance_heatmap_color_palette",
-                                   "Select the color palette to use:",
-                                   choices = as.list(heatmap_color_scheme_list),
-                                   selected = heatmap_color_scheme_list[[1]]),
-                      radioButtons("sample_distance_heatmap_scaling_type",
-                                   "Select the type of scaling to perform:",
-                                   choices = as.list(sample_distance_scaling_list),
-                                   selected = sample_distance_scaling_list[[1]]),
-                      radioButtons("sample_distance_heatmap_dendrogram_list",
-                                   "Select the type of clustering to perform:",
-                                   choices = as.list(dendrogram_list),
-                                   selected = dendrogram_list[[4]]),
-                      radioButtons("Sample_Distance_Heatmap_Plot_type",
-                                   "Interactive or static:",
-                                   choices = as.list(heatmap_type_list),
-                                   selected = heatmap_type_list[[1]]),
-                      br(),
-                      actionButton("sample_distance_run_button", "Create Heatmap", 
-                                   style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
-                      br(),
-                      br(),
-                      downloadButton("download_distance_matrix", "Download_distance_matrix.csv")
-               ),
-               column(9,
-                      br(),
-                      br(),
-                      conditionalPanel(
-                        "input.Sample_Distance_Heatmap_Plot_type == 'ggplot'",
-                        plotOutput("sample_distance_heatmap", height = "900px", width = "1200px")
-                      ),
-                      conditionalPanel(
-                        "input.Sample_Distance_Heatmap_Plot_type == 'heatmaply'",
-                        plotlyOutput("sample_distance_heatmaply", height = "900px", width = "1200px")
-                      ))
-             )
-    ),
-    
-    # ------------------ GENE EXPRESSION HEATMAP TAB ------------------
-    tabPanel("Gene Expression Heatmap",
-             fluidRow(
-               column(3,
-                      br(),
-                      selectizeInput(
-                        'samples_to_remove_select',
-                        label = "Select samples to remove:",
-                        choices = NULL,
-                        selected = NULL,
-                        options = list(
-                          `actions-box` = TRUE,
-                          placeholder = "Select samples to exclude"
-                        ),
-                        multiple = TRUE
-                      ),
-                      selectizeInput(
-                        'gene_list_select',
-                        label = "Select genes:",
-                        choices = NULL,
-                        selected = NULL,
-                        options = list(
-                          `actions-box` = TRUE,
-                          placeholder = "Type or paste gene names (comma or space separated)",
-                          create = TRUE,
-                          persist = FALSE,
-                          plugins = list('remove_button')
-                        ),
-                        multiple = TRUE
-                      ),
-                      textInput(
-                        'gene_heatmap_title',
-                        label = "Heatmap title:",
-                        value = "Gene Expression Heatmap"
-                      ),
-                      selectizeInput(
-                        'gene_heatmap_color_by',
-                        label = "Select metadata field to color by:",
-                        choices = NULL,
-                        options = list(`actions-box` = TRUE),
-                        multiple = FALSE
-                      ),
-                      radioButtons("gene_heatmap_sidebar_color_palette",
-                                   "Sidebar color palette:",
-                                   choices = as.list(color_palette_list),
-                                   selected = color_palette_list[[2]]),
-                      radioButtons("gene_heatmap_color_scheme",
-                                   "Select the color palette to use:",
-                                   choices = as.list(heatmap_color_scheme_list),
-                                   selected = heatmap_color_scheme_list[[1]]),
-                      radioButtons("gene_heatmap_scaling_type",
-                                   "Select the type of scaling to perform:",
-                                   choices = as.list(gene_expression_scaling_list),
-                                   selected = gene_expression_scaling_list[[2]]),
-                      radioButtons("gene_heatmap_dendrogram_list",
-                                   "Select the type of clustering to perform:",
-                                   choices = as.list(dendrogram_list),
-                                   selected = dendrogram_list[[2]]),
-                      radioButtons("gene_heatmap_show_names",
-                                   "Show axis labels:",
-                                   choices = as.list(gene_heatmap_show_names_list),
-                                   selected = gene_heatmap_show_names_list[[4]]),
-                      radioButtons("gene_heatmap_plot_type",
-                                   "Interactive or static",
-                                   choices = as.list(heatmap_type_list),
-                                   selected = heatmap_type_list[[1]]),
-                      br(),
-                      actionButton("gene_heatmap_run_button", "Create Heatmap", 
-                                   style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
-                      br(),
-                      br(),
-                      downloadButton("download_gene_heatmap_data", "Download_heatmap_data.csv")
-               ),
-               column(9,
-                      br(),
-                      br(),
-                      conditionalPanel(
-                        "input.gene_heatmap_plot_type == 'ggplot'",
-                        plotOutput("gene_expression_heatmap_ggplot")
-                      ),
-                      conditionalPanel(
-                        "input.gene_heatmap_plot_type == 'heatmaply'",
-                        plotlyOutput("gene_expression_heatmap_heatmaply"), height = "900px", width = "1200px"
-                      )
-               )
-             )
-    )
-  ),
-  tags$div(
-    style = "background-color: rgba(128, 128, 128, 0.3); 
-             color: #666; 
-             text-align: center; 
-             padding: 10px; 
-             margin-top: 20px;
-             font-size: 12px;
-             border-radius: 5px;",
-    "Version 1.0 | Developed by Shawn Fridlyand"
-  )
-)
-
-#----- SERVER -----
-server <- function(input, output, session) {
-  options(shiny.maxRequestSize = 100 * 1024^2)
+  gene_cols <- intersect(colnames(counts), c("gene_id", "gene_name"))
   
-  # --- Upload reactives ---
-  count_data <- reactive({
-    req(input$counts_csv)
-    formatted_counts <- read.csv(input$counts_csv$datapath, check.names = FALSE)
-    colnames(formatted_counts) <- make.names(colnames(formatted_counts))
-    return(formatted_counts)
-  })
+  sample_cols <- setdiff(colnames(counts), gene_cols)
   
-  sample_metadata <- reactive({
-    req(input$metadata_csv)
-    formatted_metadata <- read.csv(input$metadata_csv$datapath)
-    formatted_metadata$sample_id <- make.names(formatted_metadata$sample_id)
-    return(formatted_metadata)
-  })
+  if (!is.null(remove_samples) && length(remove_samples) > 0) {
+    sample_cols <- setdiff(sample_cols, remove_samples)
+    metadata <- metadata[metadata$sample_id %in% sample_cols, ]
+  }
   
-  # Check if counts are normalized (floats) or raw (integers)
-  counts_are_normalized <- reactive({
-    req(count_data())
-    
-    gene_cols <- intersect(colnames(count_data()), c("gene_id", "gene_name"))
-    sample_cols <- setdiff(colnames(count_data()), gene_cols)
-    
-    mat <- suppressWarnings(
-      as.matrix(count_data()[, sample_cols, drop = FALSE])
-    )
-    
-    storage.mode(mat) <- "double"
-    vals <- mat[!is.na(mat)]
-    
-    if (length(vals) == 0) return(TRUE)
-    
-    # Heuristics for raw counts
-    looks_integer <- all(abs(vals - round(vals)) < 1e-8)
-    has_large_range <- max(vals) > 100
-    has_many_zeros <- mean(vals == 0) > 0.1
-    
-    # Raw counts if ALL are true
-    !(looks_integer && has_large_range && has_many_zeros)
-  })
+  expr_matrix <- as.matrix(counts[, sample_cols, drop = FALSE])
   
-  # Display warning if raw counts detected
-  observeEvent(input$counts_csv, {
-    req(count_data())
-    
-    is_norm <- counts_are_normalized()
-    
-    if (isFALSE(is_norm)) {
-      showModal(modalDialog(
-        title = tags$div(
-          style = "color: #d9534f;",
-          icon("exclamation-triangle"),
-          " Raw Counts Detected"
-        ),
-        tags$p("The uploaded count matrix contains integer raw counts."),
-        tags$p("This application expects normalized values."),
-        tags$p(
-          style = "font-weight: bold;",
-          "PCA and distance metrics may be misleading."
-        ),
-        easyClose = TRUE,
-        footer = modalButton("I understand")
-      ))
-    }
-  })
+  if ("gene_id" %in% colnames(counts)) {
+    rownames(expr_matrix) <- counts$gene_id
+  }
   
-  # --- Sync sample removal across all tabs ---
-  samples_to_remove <- reactiveVal(character(0))
-  updating <- reactiveVal(FALSE)
+  rv <- matrixStats::rowVars(expr_matrix)
   
-  # Update all sample removal dropdowns when data loads
-  observeEvent(count_data(), {
-    sample_choices <- colnames(count_data())
-    sample_choices <- sample_choices[!sample_choices %in% c("gene_id", "gene_name")]
-    
-    # Reset the reactive value
-    samples_to_remove(character(0))
-    
-    updating(TRUE)
-    # Update all dropdowns with new choices and clear selection
-    updateSelectizeInput(session, "pca_samples_to_remove", 
-                         choices = sample_choices, 
-                         selected = character(0),
-                         server = TRUE)
-    updateSelectizeInput(session, "boxplot_samples_to_remove", 
-                         choices = sample_choices, 
-                         selected = character(0),
-                         server = TRUE)
-    updateSelectizeInput(session, "sample_distance_samples_to_remove", 
-                         choices = sample_choices, 
-                         selected = character(0),
-                         server = TRUE)
-    updateSelectizeInput(session, "samples_to_remove_select", 
-                         choices = sample_choices, 
-                         selected = character(0),
-                         server = TRUE)
-    updating(FALSE)
-  })
+  select <- order(rv, decreasing = TRUE)[seq_len(min(ntop, length(rv)))]
   
-  # Debounced version of each input to slow down rapid changes
-  pca_samples_debounced <- reactive({
-    input$pca_samples_to_remove
-  }) %>% debounce(500)
+  pca <- prcomp(t(expr_matrix[select, ]))
   
-  boxplot_samples_debounced <- reactive({
-    input$boxplot_samples_to_remove
-  }) %>% debounce(500)
+  percentVar <- pca$sdev^2 / sum(pca$sdev^2)
   
-  distance_samples_debounced <- reactive({
-    input$sample_distance_samples_to_remove
-  }) %>% debounce(500)
+  pca_coords <- as.data.frame(pca$x)
+  pca_coords$sample_id <- rownames(pca_coords)
   
-  heatmap_samples_debounced <- reactive({
-    input$samples_to_remove_select
-  }) %>% debounce(500)
+  if (!is.null(metadata)) {
+    pca_coords <- dplyr::left_join(pca_coords, metadata, by = "sample_id")
+  }
   
-  # Sync from PCA to reactive value
-  observeEvent(pca_samples_debounced(), {
-    if (!updating()) {
-      samples_to_remove(pca_samples_debounced() %||% character(0))
-    }
-  }, ignoreNULL = FALSE, ignoreInit = TRUE)
-  
-  # Sync from Boxplot to reactive value
-  observeEvent(boxplot_samples_debounced(), {
-    if (!updating()) {
-      samples_to_remove(boxplot_samples_debounced() %||% character(0))
-    }
-  }, ignoreNULL = FALSE, ignoreInit = TRUE)
-  
-  # Sync from Sample Distance to reactive value
-  observeEvent(distance_samples_debounced(), {
-    if (!updating()) {
-      samples_to_remove(distance_samples_debounced() %||% character(0))
-    }
-  }, ignoreNULL = FALSE, ignoreInit = TRUE)
-  
-  # Sync from Gene Expression Heatmap to reactive value
-  observeEvent(heatmap_samples_debounced(), {
-    if (!updating()) {
-      samples_to_remove(heatmap_samples_debounced() %||% character(0))
-    }
-  }, ignoreNULL = FALSE, ignoreInit = TRUE)
-  
-  # Sync reactive value to all inputs
-  observeEvent(samples_to_remove(), {
-    current <- samples_to_remove()
-    
-    updating(TRUE)
-    # Update all inputs to match the reactive value
-    if (!identical(current, input$pca_samples_to_remove)) {
-      updateSelectizeInput(session, "pca_samples_to_remove", selected = current)
-    }
-    if (!identical(current, input$boxplot_samples_to_remove)) {
-      updateSelectizeInput(session, "boxplot_samples_to_remove", selected = current)
-    }
-    if (!identical(current, input$sample_distance_samples_to_remove)) {
-      updateSelectizeInput(session, "sample_distance_samples_to_remove", selected = current)
-    }
-    if (!identical(current, input$samples_to_remove_select)) {
-      updateSelectizeInput(session, "samples_to_remove_select", selected = current)
-    }
-    updating(FALSE)
-  }, ignoreNULL = FALSE)
-  
-  # ---------------- PCA ----------------
-  pca_res <- reactive({
-    req(count_data(), sample_metadata())
-    run_pca(count_data(), sample_metadata(), ntop = 500, remove_samples = input$pca_samples_to_remove)
-  })
-  
-  observeEvent(pca_res(), {
-    pcs <- colnames(pca_res()$coords)[grepl("^PC", colnames(pca_res()$coords))]
-    if (length(pcs) >= 1) {
-      updateSelectizeInput(session, "x_pc", choices = pcs, selected = pcs[1], server = TRUE)
-    }
-    if (length(pcs) >= 2) {
-      updateSelectizeInput(session, "y_pc", choices = pcs, selected = pcs[2], server = TRUE)
-    }
-  })
-  
-  observeEvent(sample_metadata(), {
-    updateSelectizeInput(session, "color_var", label = "Color samples by:",
-                         choices = setdiff(colnames(sample_metadata()), pca_metadata_columns_to_remove),
-                         selected = if ("condition" %in% colnames(sample_metadata())) "condition" else setdiff(colnames(sample_metadata()), pca_metadata_columns_to_remove)[1],
-                         server = TRUE)
-  })
-  observeEvent(sample_metadata(), {
-    updateSelectizeInput(session, "shape_var", label = "Change sample shapes by:",
-                         choices = setdiff(colnames(sample_metadata()), pca_metadata_columns_to_remove),
-                         selected = if ("condition" %in% colnames(sample_metadata())) "condition" else setdiff(colnames(sample_metadata()), pca_metadata_columns_to_remove)[1],
-                         server = TRUE)
-  })
-  
-  observeEvent(input$PCA_run_button, {
-    output$pca_ggplot <- renderPlot({
-      req(pca_res(), input$x_pc, input$y_pc, input$color_var)
-      plot_pca(
-        pca_coords = pca_res()$coords,
-        variance   = pca_res()$variance,
-        x_pc       = input$x_pc,
-        y_pc       = input$y_pc,
-        color_var  = input$color_var,
-        palette    = input$pca_color_palette,
-        plot_type  = "ggplot",
-        shape_var  = input$shape_var
-      )
-    })
-    
-    output$pca_plotly <- renderPlotly({
-      req(pca_res(), input$x_pc, input$y_pc, input$color_var)
-      plot_pca(
-        pca_coords = pca_res()$coords,
-        variance   = pca_res()$variance,
-        x_pc       = input$x_pc,
-        y_pc       = input$y_pc,
-        color_var  = input$color_var,
-        palette    = input$pca_color_palette,
-        plot_type  = "plotly",
-        shape_var  = input$shape_var
-      )
-    })
-  })
-  
-  output$download_PCA <- downloadHandler(
-    filename = function() { paste0("PCA_coordinates_", input$color_var, ".csv") },
-    content = function(file) {
-      req(pca_res())
-      coords <- pca_res()$coords
-      meta_field <- input$color_var
-      if (!is.null(meta_field) && meta_field %in% colnames(sample_metadata())) {
-        meta <- sample_metadata()[, meta_field, drop = FALSE]
-        # Align by sample_id
-        rownames(meta) <- sample_metadata()$sample_id
-        meta <- meta[match(coords$sample_id, rownames(meta)), , drop = FALSE]
-        export_df <- cbind(coords, meta)
-      } else {
-        export_df <- coords
-      }
-      write.csv(export_df, file, row.names = FALSE)
-    }
-  )
-  
-  # ---------------- BOXPLOT ----------------
-  observeEvent(count_data(), {
-    updateSelectizeInput(session, "gene_var", label = "Select gene:", 
-                         choices = if ("gene_name" %in% colnames(count_data())) unique(count_data()$gene_name) else colnames(count_data()),
-                         selected = NULL, server = TRUE)
-  })
-  
-  observeEvent(sample_metadata(), {
-    updateSelectizeInput(session, "fact_var", label = "Sample groups", 
-                         choices = setdiff(colnames(sample_metadata()), metadata_columns_to_remove), 
-                         selected = if ("condition" %in% colnames(sample_metadata())) "condition" else setdiff(colnames(sample_metadata()), metadata_columns_to_remove)[1],
-                         server = TRUE)
-  })
-  
-  expression_df <- reactive({
-    modify_df(count_data(), sample_metadata(), input$Log, input$QC_check, input$gene_var, remove_samples = input$boxplot_samples_to_remove)
-  })
-  
-  expression_table_df <- reactive({
-    modify_table(count_data(), sample_metadata(), input$Log, input$QC_check, input$gene_var, input$fact_var, remove_samples = input$boxplot_samples_to_remove)
-  })
-  
-  pvalue_df <- reactive({
-    table_pvalue(count_data(), sample_metadata(), input$Log, input$QC_check, input$gene_var, input$fact_var, remove_samples = input$boxplot_samples_to_remove)
-  })
-  
-  panova_df <- reactive({
-    table_panova(count_data(), sample_metadata(), input$Log, input$QC_check, input$gene_var, input$fact_var, remove_samples = input$boxplot_samples_to_remove)
-  })
-  
-  observeEvent(input$run_button, {
-    req(input$gene_var, input$fact_var)
-    
-    output$boxplot_plotly <- renderPlotly({
-      req(expression_df())
-      draw_boxplot(expression_df(), input$gene_var, input$fact_var, input$boxplot_color_palette, input$Log, input$Box_violin, input$Boxplot_Plot_type)
-    })
-    
-    output$boxplot_ggplot <- renderPlot({
-      req(expression_df())
-      draw_boxplot(expression_df(), input$gene_var, input$fact_var, input$boxplot_color_palette, input$Log, input$Box_violin, input$Boxplot_Plot_type)
-    })
-    
-    output$table_data <- renderDataTable(expression_table_df(), options = list(lengthMenu = c(5,30,50), pageLength = 5))
-    output$table_p <- renderDataTable(pvalue_df(), options = list(lengthMenu = c(5,30,50), pageLength = 5))
-    output$table_panova <- renderDataTable(panova_df(), options = list(lengthMenu = c(5,30,50), pageLength = 5))
-  })
-  
-  output$download_exp <- downloadHandler(
-    filename = function() { paste0(input$gene_var, "_expression.csv") },
-    content = function(file) { write.csv(expression_table_df(), file, row.names = FALSE) }
-  )
-  
-  output$download_pval <- downloadHandler(
-    filename = function() { paste0(input$gene_var, "_pvalue.csv") },
-    content = function(file) { write.csv(pvalue_df(), file, row.names = FALSE) }
-  )
-  
-  # ---------------- SAMPLE DISTANCE HEATMAP ----------------
-  observeEvent(count_data(), {
-    # sample names (exclude gene_id / gene_name columns if present)
-    sample_choices <- colnames(count_data())
-    sample_choices <- sample_choices[!sample_choices %in% c("gene_id", "gene_name")]
-    updateSelectizeInput(session, "sample_distance_samples_to_remove",
-                         label = "Select samples to remove:",
-                         choices = sample_choices,
-                         selected = NULL,
-                         server = TRUE)
-  })
-  
-  observeEvent(sample_metadata(), {
-    updateSelectizeInput(session, "metadata_color_bars", 
-                         label = "Select metadata field to color by:",
-                         choices = setdiff(colnames(sample_metadata()), metadata_columns_to_remove),
-                         selected = if ("condition" %in% colnames(sample_metadata())) "condition" else setdiff(colnames(sample_metadata()), metadata_columns_to_remove)[1],
-                         server = TRUE)
-  })
-  
-  # ---- Reactive: compute distance matrix (updates immediately) ----
-  dist_matrix_reactive <- eventReactive(input$sample_distance_run_button, {
-    req(count_data(), sample_metadata())
-    
-    samples_remove <- input$sample_distance_samples_to_remove
-    
-    run_sample_distance(
-      counts = count_data(),
-      metadata = sample_metadata(),
-      remove_samples = samples_remove,
-      scale_type = input$sample_distance_heatmap_scaling_type,
-      ntop = 500
-    )
-  })
-  
-  # ---- Render static ggplot heatmap ----
-  output$sample_distance_heatmap <- renderPlot({
-    req(dist_matrix_reactive())
-    
-    p <- plot_sample_distance_heatmap(
-      dist_matrix = dist_matrix_reactive(),
-      metadata = sample_metadata(),
-      color_by = input$metadata_color_bars,
-      heatmap_title = "Sample Distance Heatmap",
-      sidebar_color_scheme = input$sample_distance_sidebar_color_palette,
-      heatmap_color_scheme = input$sample_distance_heatmap_color_palette,
-      column_text_angle = 45,
-      show_dendrogram = c(
-        input$sample_distance_heatmap_dendrogram_list %in% c("row", "both"),
-        input$sample_distance_heatmap_dendrogram_list %in% c("column", "both")
-      ),
-      plot_type = "ggplot",
-      show_tick_labels = c(
-        input$sample_distance_heatmap_show_names %in% c("x", "both"),
-        input$sample_distance_heatmap_show_names %in% c("y", "both")
-      )
-    )
-    print(p)
-  })
-  
-  # ---- Render heatmaply ----
-  output$sample_distance_heatmaply <- renderPlotly({
-    req(dist_matrix_reactive())
-    
-    hm <- plot_sample_distance_heatmap(
-      dist_matrix = dist_matrix_reactive(),
-      metadata = sample_metadata(),
-      color_by = input$metadata_color_bars,
-      heatmap_title = "Sample Distance Heatmap",
-      sidebar_color_scheme = input$sample_distance_sidebar_color_palette,
-      heatmap_color_scheme = input$sample_distance_heatmap_color_palette,
-      column_text_angle = 45,
-      show_dendrogram = c(
-        input$sample_distance_heatmap_dendrogram_list %in% c("row", "both"),
-        input$sample_distance_heatmap_dendrogram_list %in% c("column", "both")
-      ),
-      plot_type = "heatmaply",
-      show_tick_labels = c(
-        input$sample_distance_heatmap_show_names %in% c("x", "both"),
-        input$sample_distance_heatmap_show_names %in% c("y", "both")
-      ),
-      colorbar_ypos = 0.65,
-      colorbar_len = 0.3,
-    )
-    return(hm)
-  })
-  
-  # ---- Download distance matrix ----
-  output$download_distance_matrix <- downloadHandler(
-    filename = function() { paste0("sample_distance_matrix_", Sys.Date(), ".csv") },
-    content = function(file) {
-      req(dist_matrix_reactive())
-      write.csv(dist_matrix_reactive(), file, row.names = TRUE)
-    }
-  )
-  
-  # ------------------ GENE EXPRESSION HEATMAP ------------------
-  
-  # Update gene list choices when count data loads
-  observeEvent(count_data(), {
-    gene_choices <- if ("gene_name" %in% colnames(count_data())) {
-      unique(count_data()$gene_name)
-    } else {
-      rownames(count_data())
-    }
-    updateSelectizeInput(session, "gene_list_select", 
-                         label = "Select genes:",
-                         choices = gene_choices,
-                         selected = NULL,
-                         server = TRUE)
-    
-    # Update sample removal choices (exclude gene_id/gene_name columns)
-    sample_choices <- colnames(count_data())
-    sample_choices <- sample_choices[!sample_choices %in% c("gene_id", "gene_name")]
-    updateSelectizeInput(session, "samples_to_remove_select",
-                         label = "Select samples to remove:",
-                         choices = sample_choices,
-                         selected = NULL,
-                         server = TRUE)
-  })
-  
-  # Update color_by choices when metadata loads
-  observeEvent(sample_metadata(), {
-    updateSelectizeInput(session, "gene_heatmap_color_by", 
-                         label = "Color samples by:",
-                         choices = setdiff(colnames(sample_metadata()), metadata_columns_to_remove),
-                         selected = if ("condition" %in% colnames(sample_metadata())) "condition" else setdiff(colnames(sample_metadata()), metadata_columns_to_remove)[1],
-                         server = TRUE)
-  })
-  
-  # Add gene annotations reactive(remnant of old solution, currently not needed)
-  gene_annotations_reactive <- reactive({NULL})
-  
-  # Reactive: prepare gene list and sample list
-  gene_sample_lists_reactive <- eventReactive({
-    input$gene_heatmap_run_button
-    input$samples_to_remove_select
-  }, {
-    req(count_data(), input$gene_list_select)
-    
-    # Get selected genes
-    gene_list <- input$gene_list_select
-    
-    # Get sample list
-    all_samples <- colnames(count_data())
-    all_samples <- all_samples[!all_samples %in% c("gene_id", "gene_name")]
-    
-    samples_remove <- input$samples_to_remove_select
-    sample_list <- if (!is.null(samples_remove) && length(samples_remove) > 0) {
-      setdiff(all_samples, samples_remove)
-    } else {
-      all_samples
-    }
-    
-    list(
-      gene_list = gene_list,
-      sample_list = sample_list
-    )
-  }, ignoreNULL = FALSE)
-  
-  # Render static ggplot heatmap
-  output$gene_expression_heatmap_ggplot <- renderPlot({
-    req(gene_sample_lists_reactive())
-    
-    lists <- gene_sample_lists_reactive()
-    
-    p <- plot_gene_expression_heatmap(
-      counts = count_data(),
-      gene_list = lists$gene_list,
-      gene_annotations = gene_annotations_reactive(),
-      sample_list = lists$sample_list,
-      metadata = sample_metadata(),
-      heatmap_title = input$gene_heatmap_title,
-      color_by = input$gene_heatmap_color_by,
-      sidebar_color_scheme = input$gene_heatmap_sidebar_color_palette,
-      heatmap_color_scheme = input$gene_heatmap_color_scheme,
-      xlab = "Samples",
-      ylab = "Genes",
-      column_text_angle = 90,
-      legend_title = "Expression",
-      cex_row = 1,
-      cex_col = 1,
-      scaling = input$gene_heatmap_scaling_type,
-      cluster = input$gene_heatmap_clustering_type,
-      dendrogram = input$gene_heatmap_dendrogram_list,
-      show_names = input$gene_heatmap_show_names,
-      heatmap_type = "ggheatmap"
-    )
-  }, height = 900, width = 1200)
-  
-  # Render interactive heatmaply
-  output$gene_expression_heatmap_heatmaply <- renderPlotly({
-    req(gene_sample_lists_reactive())
-    
-    lists <- gene_sample_lists_reactive()
-    
-    plot_gene_expression_heatmap(
-      counts = count_data(),
-      gene_list = lists$gene_list,
-      gene_annotations = gene_annotations_reactive(),
-      sample_list = lists$sample_list,
-      metadata = sample_metadata(),
-      heatmap_title = input$gene_heatmap_title,
-      color_by = input$gene_heatmap_color_by,
-      sidebar_color_scheme = input$gene_heatmap_sidebar_color_palette,
-      heatmap_color_scheme = input$gene_heatmap_color_scheme,
-      xlab = "Samples",
-      ylab = "Genes",
-      column_text_angle = 90,
-      legend_title = "Expression",
-      cex_row = 1,
-      cex_col = 1,
-      scaling = input$gene_heatmap_scaling_type,
-      cluster = input$gene_heatmap_clustering_type,
-      dendrogram = input$gene_heatmap_dendrogram_list,
-      show_names = input$gene_heatmap_show_names,
-      heatmap_type = "heatmaply"
-    )
-  })
-  
-  # Download gene expression matrix
-  output$download_gene_heatmap_data <- downloadHandler(
-    filename = function() { 
-      paste0("gene_expression_heatmap_", input$gene_heatmap_scaling_type, "_", Sys.Date(), ".csv") 
-    },
-    content = function(file) {
-      req(gene_sample_lists_reactive())
-      
-      lists <- gene_sample_lists_reactive()
-      
-      if ("gene_name" %in% colnames(count_data())) {
-        expr_matrix <- count_data()[count_data()$gene_name %in% lists$gene_list, 
-                                    lists$sample_list, drop = FALSE]
-        rownames(expr_matrix) <- count_data()$gene_name[count_data()$gene_name %in% lists$gene_list]
-      } else if ("gene_id" %in% colnames(count_data())) {
-        expr_matrix <- count_data()[count_data()$gene_id %in% lists$gene_list, 
-                                    lists$sample_list, drop = FALSE]
-        rownames(expr_matrix) <- count_data()$gene_id[count_data()$gene_id %in% lists$gene_list]
-      } else {
-        expr_matrix <- count_data()[rownames(count_data()) %in% lists$gene_list, 
-                                    lists$sample_list, drop = FALSE]
-      }
-      
-      write.csv(expr_matrix, file, row.names = TRUE)
-    }
-  )
-  
+  return(list(
+    pca = pca,
+    coords = pca_coords,
+    variance = percentVar * 100
+  ))
 }
-shinyApp(ui = ui, server = server)
+
+plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL, shape_var = NULL,
+                     palette = "Set1", plot_type = "ggplot") {
+  
+  x_label <- paste0(x_pc, " (", round(variance[as.numeric(gsub("PC", "", x_pc))], 2), "%)")
+  y_label <- paste0(y_pc, " (", round(variance[as.numeric(gsub("PC", "", y_pc))], 2), "%)")
+  
+  if (plot_type == "ggplot") {
+    p <- ggplot(pca_coords, aes_string(x = x_pc, y = y_pc, color = color_var, shape = shape_var)) +
+      geom_point(size = 6, alpha = 0.8) +
+      scale_color_brewer(palette = palette, name = color_var) +
+      labs(
+        title = "Principal Component Analysis",
+        x = x_label, 
+        y = y_label
+      ) +
+      theme_minimal() +
+      theme(
+        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10),
+        axis.title.x = element_text(size = 15, face = "bold"),
+        axis.title.y = element_text(size = 15, face = "bold"),
+        legend.position = "right",
+        legend.background = element_rect(fill = "white", color = "gray80"),
+        legend.key = element_rect(fill = "white"),
+      )
+    
+    if (!is.null(shape_var) && shape_var != "") {
+      all_ggplot_shapes <- c(
+        # Filled
+        16, 15, 17, 18, 19,        # circle, square, triangle-up, diamond, circle (large)
+        7, 8, 9, 10, 11, 12, 13, 14,  # special filled
+        # Open variants
+        1, 0, 2, 5,                # open circle, square, triangle, diamond
+        6, 3, 4,                   # triangle-down, cross, x
+        # Filled + border
+        21, 22, 23, 24, 25        # filled circle, square, diamond, triangle-up, triangle-down
+      )
+      
+      unique_shapes <- unique(pca_coords[[shape_var]])
+      n_shapes      <- length(unique_shapes)
+      
+      if (n_shapes > length(all_ggplot_shapes)) {
+        warning("More groups (", n_shapes, ") than available shapes (",
+                length(all_ggplot_shapes), ") — some shapes will repeat.")
+      }
+      
+      shape_map <- setNames(
+        all_ggplot_shapes[((seq_len(n_shapes) - 1) %% length(all_ggplot_shapes)) + 1],
+        unique_shapes
+      )
+      
+      p <- p + scale_shape_manual(name = shape_var, values = shape_map)
+    }
+    
+    p <- p +
+      theme(
+        legend.key.size    = unit(0.4, "cm"),
+        legend.text        = element_text(size = 8),
+        legend.title       = element_text(size = 9, face = "bold"),
+        legend.box.spacing = unit(0.2, "cm"),
+        legend.margin      = margin(0, 0, 0, 0),
+        legend.box         = "vertical",
+        legend.spacing.y   = unit(0.1, "cm")
+      )
+    return(p)
+    
+  } else if (plot_type == "plotly") {
+    
+    all_plotly_symbols <- plotly_marker_symbols
+    
+    symbol_var <- NULL
+    symbol_map <- NULL
+    if (!is.null(shape_var) && shape_var != "") {
+      symbol_var    <- pca_coords[[shape_var]]
+      unique_shapes <- unique(symbol_var)
+      n_shapes      <- length(unique_shapes)
+      
+      if (n_shapes > length(all_plotly_symbols)) {
+        warning("More groups (", n_shapes, ") than available plotly symbols (",
+                length(all_plotly_symbols), ") — some shapes will repeat.")
+      }
+      
+      symbol_map <- setNames(
+        all_plotly_symbols[((seq_len(n_shapes) - 1) %% length(all_plotly_symbols)) + 1],
+        unique_shapes
+      )
+    }
+    
+    p <- plotly::plot_ly(
+      pca_coords,
+      x = ~get(x_pc),
+      y = ~get(y_pc),
+      color = if (!is.null(color_var)) pca_coords[[color_var]] else NULL,
+      symbol  = symbol_var,
+      symbols = if (!is.null(symbol_map)) symbol_map else all_plotly_symbols,
+      colors = RColorBrewer::brewer.pal(max(3, length(unique(pca_coords[[color_var]]))), palette),
+      type = "scatter",
+      mode = "markers",
+      marker = list(size = 15),
+      text = ~sample_id,
+      hovertemplate = paste0(
+        "<b>%{text}</b><br>",
+        x_pc, ": %{x:.2f}<br>",
+        y_pc, ": %{y:.2f}<br>",
+        if (!is.null(shape_var) && shape_var != "") paste0(shape_var, ": ", pca_coords[[shape_var]], "<br>") else "",
+        "<extra></extra>"
+      )
+    ) %>% plotly::layout(
+      title = list(text = "Principal Component Analysis", x = 0.5, xanchor = "center"),
+      xaxis = list(
+        title = x_label,
+        zerolinecolor = '#969696',
+        zerolinewidth = 2,
+        linecolor = '#636363',
+        linewidth = 2,
+        gridcolor = '#e0e0e0'
+      ),
+      yaxis = list(
+        title = y_label,
+        zerolinecolor = '#969696',
+        zerolinewidth = 2,
+        linecolor = '#636363',
+        linewidth = 2,
+        gridcolor = '#e0e0e0'
+      ),
+      legend = list(
+        title = list(text = paste0('<b>', if (!is.null(color_var)) color_var else "", '</b>')),
+        x = 1.02,
+        y = 1,
+        xanchor = "left",
+        bgcolor = 'rgba(255,255,255,0.9)',
+        bordercolor = '#636363',
+        borderwidth = 1
+      )
+    ) %>% configure_plotly_panel(exportFormat = "svg")
+    return(p)
+  }
+}
+# ------------------ BOXPLOT ------------------
+get_factor_comparisons = function(condition = c(), 
+                                  reference_group = NULL) {
+  condition = sort(unique(as.character(condition)))
+  if (length(condition) <= 1) {
+    comparisons = data.frame(comparison_name = character(), 
+                             comparison_group = character(), 
+                             reference_group = character())
+    return(comparisons)    
+  } 
+  
+  if (is.null(reference_group) == TRUE) {
+    comparisons = t(utils::combn(x = condition, m = 2, simplify = TRUE))
+  } else {
+    comparisons = t(sapply(condition, function(cond) {c(cond, reference_group)}))
+  }
+  comparisons = as.data.frame(comparisons, stringsAsFactors = FALSE)
+  colnames(comparisons) = c("comparison_group", "reference_group")
+  
+  comparisons = comparisons[which(comparisons$comparison_group != comparisons$reference_group), ]
+  comparisons = comparisons[order(comparisons$reference_group), , drop = FALSE]
+  
+  comparisons$comparison_name = paste0(comparisons$comparison_group, "_vs_", comparisons$reference_group)
+  comparisons = comparisons[, c("comparison_name", "comparison_group", "reference_group"), drop = FALSE]
+  rownames(comparisons) = NULL
+  
+  return(comparisons)
+}
+
+modify_df <- function(counts_df, metadata, log, QC_check, gene, remove_samples = NULL){
+  if (!is.null(remove_samples) && length(remove_samples) > 0) {
+    keep_samples <- setdiff(metadata$sample_id, remove_samples)
+    metadata <- metadata[metadata$sample_id %in% keep_samples, ]
+    keep_cols <- c(intersect(colnames(counts_df), c("gene_id", "gene_name")), keep_samples)
+    counts_df <- counts_df[, colnames(counts_df) %in% keep_cols, drop = FALSE]
+  }
+  
+  if(QC_check == "no"){
+    if(log == "yes"){
+      counts_table_logged = counts_df[,metadata$sample_id]
+      transposed_counts = as.data.frame(t(counts_table_logged))
+      colnames(transposed_counts) = counts_df$gene_name
+      combination_df = cbind(metadata, transposed_counts)
+      combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
+      combination_df[gene] = log2(combination_df[gene]+1)
+    }
+    if(log == "no"){
+      counts_table_logged = counts_df[,metadata$sample_id]
+      transposed_counts = as.data.frame(t(counts_table_logged))
+      colnames(transposed_counts) = counts_df$gene_name
+      combination_df = cbind(metadata, transposed_counts)
+      combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
+    }}
+  if(QC_check == "yes"){
+    if(log == "yes"){
+      counts_table_logged = counts_df[,metadata$sample_id]
+      transposed_counts = as.data.frame(t(counts_table_logged))
+      colnames(transposed_counts) = counts_df$gene_name
+      combination_df = cbind(metadata, transposed_counts)
+      combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
+      combination_df[gene] = log2(combination_df[gene]+1)
+      combination_df = filter(combination_df, quality_check == "pass")
+    } 
+    if(log == "no"){
+      counts_table_logged = counts_df[,metadata$sample_id]
+      transposed_counts = as.data.frame(t(counts_table_logged))
+      colnames(transposed_counts) = counts_df$gene_name
+      combination_df = cbind(metadata, transposed_counts)
+      combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
+      combination_df = filter(combination_df, quality_check == "pass")
+    }}
+  return(combination_df)
+}
+
+
+modify_table <- function(counts_df, metadata, log, QC_check, gene, fact_var, remove_samples = NULL){
+  if (!is.null(remove_samples) && length(remove_samples) > 0) {
+    keep_samples <- setdiff(metadata$sample_id, remove_samples)
+    metadata <- metadata[metadata$sample_id %in% keep_samples, ]
+    keep_cols <- c(intersect(colnames(counts_df), c("gene_id", "gene_name")), keep_samples)
+    counts_df <- counts_df[, colnames(counts_df) %in% keep_cols, drop = FALSE]
+  }
+  if(QC_check == "no"){
+    if(log == "yes"){
+      counts_table_logged = counts_df[,metadata$sample_id]
+      transposed_counts = as.data.frame(t(counts_table_logged))
+      colnames(transposed_counts) = counts_df$gene_name
+      combination_df = cbind(metadata, transposed_counts)
+      combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
+      combination_df = combination_df[,unique(c("sample_id", "condition", "replicate","quality_check", fact_var, gene))]
+      combination_df
+      combination_df[gene] = log2(combination_df[gene]+1)
+      rownames(combination_df) = NULL
+    }
+    if(log == "no"){
+      counts_table_logged = counts_df[,metadata$sample_id]
+      transposed_counts = as.data.frame(t(counts_table_logged))
+      colnames(transposed_counts) = counts_df$gene_name
+      combination_df = cbind(metadata, transposed_counts)
+      combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
+      combination_df = combination_df[,unique(c("sample_id", "condition", "replicate","quality_check", fact_var, gene))]
+      rownames(combination_df) = NULL
+    }}
+  if(QC_check == "yes"){
+    if(log == "yes"){
+      counts_table_logged = counts_df[,metadata$sample_id]
+      transposed_counts = as.data.frame(t(counts_table_logged))
+      colnames(transposed_counts) = counts_df$gene_name
+      combination_df = cbind(metadata, transposed_counts)
+      combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
+      combination_df = combination_df[,unique(c("sample_id", "condition", "replicate","quality_check", fact_var, gene))]
+      combination_df[gene] = log2(combination_df[gene]+1)
+      combination_df = filter(combination_df, quality_check == "pass")
+      rownames(combination_df) = NULL
+    } 
+    if(log == "no"){
+      counts_table_logged = counts_df[,metadata$sample_id]
+      transposed_counts = as.data.frame(t(counts_table_logged))
+      colnames(transposed_counts) = counts_df$gene_name
+      combination_df = cbind(metadata, transposed_counts)
+      combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
+      combination_df = combination_df[,unique(c("sample_id", "condition", "replicate","quality_check", fact_var, gene))]
+      combination_df = filter(combination_df, quality_check == "pass")
+      rownames(combination_df) = NULL
+    }}
+  return(combination_df)
+}
+
+table_pvalue = function(counts_df, metadata, log, QC_check, gene, fact_var, remove_samples = NULL){
+  if (!is.null(remove_samples) && length(remove_samples) > 0) {
+    keep_samples <- setdiff(metadata$sample_id, remove_samples)
+    metadata <- metadata[metadata$sample_id %in% keep_samples, ]
+    keep_cols <- c(intersect(colnames(counts_df), c("gene_id", "gene_name")), keep_samples)
+    counts_df <- counts_df[, colnames(counts_df) %in% keep_cols, drop = FALSE]
+  }
+  dups = table(metadata[,fact_var])
+  dups_df = as.data.frame(dups)
+  save_s = c()
+  if(sum(dups_df[,2]) == length(unique(metadata[,fact_var]))){
+    ptab = data.frame(Error = c("P-value requires more than 1 replicate per group!"))
+  } else if(length(unique(metadata[,fact_var]))<=1){
+    ptab = data.frame(Error = c("P-value requires more than 1 grouping factor!"))
+  }else{
+    for(i in 1:nrow(dups_df)){
+      if(dups_df[i,2] == 1){
+        g = dups_df[i,1]
+        g = as.character(g)
+        save_s = append(save_s, g)}
+      sid = metadata %>% filter(.data[[fact_var]] %in% save_s)
+      snames = sid$sample_id
+      metadata = filter(metadata, !sample_id %in% snames)
+      counts_df = counts_df[,!(names(counts_df) %in% snames)]}  
+    if(QC_check == "no"){
+      if(log == "yes"){
+        counts_table_logged = counts_df[,metadata$sample_id]
+        transposed_counts = as.data.frame(t(counts_table_logged))
+        colnames(transposed_counts) = counts_df$gene_name
+        combination_df = cbind(metadata, transposed_counts)
+        combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
+        combination_df[gene] = log2(combination_df[gene]+1)
+        combination_df = combination_df[,unique(c(gene, fact_var, "sample_id", "condition", "replicate","quality_check"))]
+        colnames(combination_df)[1] = "x"
+        colnames(combination_df)[2] ="y"
+        ptab = compare_means(x ~ y, combination_df,method = "t.test")
+        rownames(ptab) = NULL
+        ptab = ptab[,-1]
+      }
+      if(log == "no"){
+        counts_table_logged = counts_df[,metadata$sample_id]
+        transposed_counts = as.data.frame(t(counts_table_logged))
+        colnames(transposed_counts) = counts_df$gene_name
+        combination_df = cbind(metadata, transposed_counts)
+        combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
+        combination_df = combination_df[,unique(c(gene, fact_var, "sample_id", "condition", "replicate","quality_check"))]
+        colnames(combination_df)[1] = "x"
+        colnames(combination_df)[2] ="y"
+        ptab = compare_means(x ~ y, combination_df,method = "t.test")
+        model <- aov(x ~ y, data = combination_df)
+        panova = summary(model)
+        rownames(ptab) = NULL
+        ptab = ptab[,-1]
+      }}
+    if(QC_check == "yes"){
+      if(log == "yes"){
+        counts_table_logged = counts_df[,metadata$sample_id]
+        transposed_counts = as.data.frame(t(counts_table_logged))
+        colnames(transposed_counts) = counts_df$gene_name
+        combination_df = cbind(metadata, transposed_counts)
+        combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
+        combination_df[gene] = log2(combination_df[gene]+1)
+        combination_df = combination_df[,unique(c(gene, fact_var, "sample_id", "condition", "replicate","quality_check"))]
+        combination_df = filter(combination_df, quality_check == "pass")
+        colnames(combination_df)[1] = "x"
+        colnames(combination_df)[2] ="y"
+        ptab = compare_means(x ~ y, combination_df,method = "t.test")
+        model <- aov(x ~ y, data = combination_df)
+        panova = summary(model)
+        rownames(ptab) = NULL
+        ptab = ptab[,-1]
+      } 
+      if(log == "no"){
+        counts_table_logged = counts_df[,metadata$sample_id]
+        transposed_counts = as.data.frame(t(counts_table_logged))
+        colnames(transposed_counts) = counts_df$gene_name
+        combination_df = cbind(metadata, transposed_counts)
+        combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
+        combination_df = combination_df[,unique(c(gene, fact_var, "sample_id", "condition", "replicate","quality_check"))]
+        combination_df = filter(combination_df, quality_check == "pass")
+        colnames(combination_df)[1] = "x"
+        colnames(combination_df)[2] ="y"
+        ptab = compare_means(x ~ y, combination_df,method = "t.test")
+        model <- aov(x ~ y, data = combination_df)
+        panova = summary(model)
+        rownames(ptab) = NULL
+        ptab = ptab[,-1]
+      }}
+    if(is.null(save_s) != TRUE){
+      for(i in 1:length(save_s)){
+        vec = c(save_s[i], "*", "NA", "NA", "NA", "NA","NA")
+        ptab = rbind(ptab, vec)}
+      return(ptab)
+    }else{
+      return(ptab)
+    }
+  }}
+
+table_panova = function(counts_df, metadata, log, QC_check, gene, fact_var, remove_samples = NULL){
+  if (!is.null(remove_samples) && length(remove_samples) > 0) {
+    keep_samples <- setdiff(metadata$sample_id, remove_samples)
+    metadata <- metadata[metadata$sample_id %in% keep_samples, ]
+    keep_cols <- c(intersect(colnames(counts_df), c("gene_id", "gene_name")), keep_samples)
+    counts_df <- counts_df[, colnames(counts_df) %in% keep_cols, drop = FALSE]
+  }
+  if(length(unique(metadata[,fact_var]))<=1){
+    ptab = data.frame(Error = c("P-value requires more than 1 grouping factor!"))
+  } else {
+    if(QC_check == "no"){
+      if(log == "yes"){
+        counts_table_logged = counts_df[,metadata$sample_id]
+        transposed_counts = as.data.frame(t(counts_table_logged))
+        colnames(transposed_counts) = counts_df$gene_name
+        combination_df = cbind(metadata, transposed_counts)
+        combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
+        combination_df[gene] = log2(combination_df[gene]+1)
+        combination_df = combination_df[,unique(c(gene, fact_var, "sample_id", "condition", "replicate","quality_check"))]
+        colnames(combination_df)[1] = "x"
+        colnames(combination_df)[2] ="y"
+        model <- aov(x ~ y, data = combination_df)
+        panova = summary(model)
+        panova_df = as.data.frame(panova[[1]])
+      }
+      if(log == "no"){
+        counts_table_logged = counts_df[,metadata$sample_id]
+        transposed_counts = as.data.frame(t(counts_table_logged))
+        colnames(transposed_counts) = counts_df$gene_name
+        combination_df = cbind(metadata, transposed_counts)
+        combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
+        combination_df = combination_df[,unique(c(gene, fact_var, "sample_id", "condition", "replicate","quality_check"))]
+        colnames(combination_df)[1] = "x"
+        colnames(combination_df)[2] ="y"
+        model <- aov(x ~ y, data = combination_df)
+        panova = summary(model)
+        panova_df = as.data.frame(panova[[1]])
+      }}
+    if(QC_check == "yes"){
+      if(log == "yes"){
+        counts_table_logged = counts_df[,metadata$sample_id]
+        transposed_counts = as.data.frame(t(counts_table_logged))
+        colnames(transposed_counts) = counts_df$gene_name
+        combination_df = cbind(metadata, transposed_counts)
+        combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
+        combination_df[gene] = log2(combination_df[gene]+1)
+        combination_df = combination_df[,unique(c(gene, fact_var, "sample_id", "condition", "replicate","quality_check"))]
+        combination_df = filter(combination_df, quality_check == "pass")
+        colnames(combination_df)[1] = "x"
+        colnames(combination_df)[2] ="y"
+        model <- aov(x ~ y, data = combination_df)
+        panova = summary(model)
+        panova_df = as.data.frame(panova[[1]])
+      } 
+      if(log == "no"){
+        counts_table_logged = counts_df[,metadata$sample_id]
+        transposed_counts = as.data.frame(t(counts_table_logged))
+        colnames(transposed_counts) = counts_df$gene_name
+        combination_df = cbind(metadata, transposed_counts)
+        combination_df = combination_df[, !colnames(combination_df) %in% metadata_columns_to_remove, drop = FALSE]
+        combination_df = combination_df[,unique(c(gene, fact_var, "sample_id", "condition", "replicate","quality_check"))]
+        combination_df = filter(combination_df, quality_check == "pass")
+        colnames(combination_df)[1] = "x"
+        colnames(combination_df)[2] ="y"
+        model <- aov(x ~ y, data = combination_df)
+        panova = summary(model)
+        panova_df = as.data.frame(panova[[1]])
+      }}
+    return(panova_df)
+  }}
+
+configure_plotly_panel = function(
+    plotly_panel, 
+    exportFormat = "svg", 
+    annotationPosition = TRUE,
+    annotationTail = TRUE, 
+    annotationText = TRUE,
+    axisTitleText = FALSE,
+    colorbarPosition = TRUE,
+    colorbarTitleText = TRUE,
+    legendPosition = TRUE,
+    legendText = TRUE,
+    shapePosition = FALSE,
+    titleText = TRUE) {
+  
+  plotly_panel = plotly_panel %>%
+    plotly::config(
+      toImageButtonOptions = list(
+        format = exportFormat
+      ),
+      edits = list(
+        annotationPosition = annotationPosition,
+        annotationTail = annotationTail, 
+        annotationText = annotationText,
+        axisTitleText = axisTitleText,
+        colorbarPosition = colorbarPosition,
+        colorbarTitleText = colorbarTitleText,
+        legendPosition = legendPosition,
+        legendText = legendText,
+        shapePosition = shapePosition,
+        titleText = titleText
+      )
+    ) 
+  return(plotly_panel)
+}
+
+draw_boxplot <- function(table, gene, factor, color_palette, log, box_type, plot_type){
+  nb.cols <- length(unique(table[,factor]))
+  my_colors <- colorRampPalette(brewer.pal(8, color_palette))(nb.cols)
+  
+  if(plot_type == "plotly"){
+    if(grepl("-", gene) == TRUE){
+      gene2 <- sub('-','_',gene)
+      generow <- which(colnames(table) == gene)
+      colnames(table)[generow] <- gene2
+      gene2 <- as.symbol(gene2)
+    } else {
+      gene2 <- gene
+    }
+    if(factor == "replicate"){
+      table$replicate <- as.character(table$replicate)
+    }
+    
+    if(box_type == "Boxplot"){
+      plotly::plot_ly(
+        table,
+        type = "box",
+        x = as.formula(paste0("~", factor)),
+        y = as.formula(paste0("~", gene2)),
+        color = as.formula(paste0("~", factor)),
+        colors = my_colors
+      ) %>%
+        layout(
+          title = list(text = sprintf("<b>%s Gene Expression</b>", gene), x = 0.5, xanchor = "center"),
+          xaxis = list(
+            title = list(text = "<b>Sample Groups</b>"),
+            zerolinecolor = '#969696',
+            zerolinewidth = 2,
+            linecolor = '#636363',
+            linewidth = 2,
+            gridcolor = '#e0e0e0'
+          ),
+          yaxis = list(
+            title = list(text = paste0("<b>", ifelse(log == "yes", "Log₂ ", ""), "Gene Expression</b>")),
+            zerolinecolor = '#969696',
+            zerolinewidth = 2,
+            linecolor = '#636363',
+            linewidth = 2,
+            gridcolor = '#e0e0e0'
+          ),
+          legend = list(
+            title = list(text = paste0('<b>', factor, '</b>')),
+            x = 1.02,
+            y = 1,
+            xanchor = "left",
+            bgcolor = 'rgba(255,255,255,0.9)',
+            bordercolor = '#636363',
+            borderwidth = 1
+          )
+        ) %>% configure_plotly_panel(exportFormat = "svg")
+      
+    } else if(box_type == "box_points"){
+      plotly::plot_ly(
+        table,
+        type = "box",
+        boxpoints = 'all',
+        pointpos = 0,
+        x = as.formula(paste0("~", factor)),
+        y = as.formula(paste0("~", gene2)),
+        color = as.formula(paste0("~", factor)),
+        colors = my_colors
+      ) %>%
+        layout(
+          title = list(text = sprintf("<b>%s Gene Expression</b>", gene), x = 0.5, xanchor = "center"),
+          xaxis = list(
+            title = list(text = "<b>Sample Groups</b>"),
+            zerolinecolor = '#969696',
+            zerolinewidth = 2,
+            linecolor = '#636363',
+            linewidth = 2,
+            gridcolor = '#e0e0e0'
+          ),
+          yaxis = list(
+            title = list(text = paste0("<b>", ifelse(log == "yes", "Log₂ ", ""), "Gene Expression</b>")),
+            zerolinecolor = '#969696',
+            zerolinewidth = 2,
+            linecolor = '#636363',
+            linewidth = 2,
+            gridcolor = '#e0e0e0'
+          ),
+          legend = list(
+            title = list(text = paste0('<b>', factor, '</b>')),
+            x = 1.02,
+            y = 1,
+            xanchor = "left",
+            bgcolor = 'rgba(255,255,255,0.9)',
+            bordercolor = '#636363',
+            borderwidth = 1
+          )
+        ) %>% configure_plotly_panel(exportFormat = "svg")
+      
+    } else if(box_type == "Violin plot"){
+      plotly::plot_ly(
+        table,
+        type = "violin",
+        box = list(visible = TRUE),
+        meanline = list(visible = TRUE),
+        x = as.formula(paste0("~", factor)),
+        y = as.formula(paste0("~", gene2)),
+        color = as.formula(paste0("~", factor)),
+        colors = my_colors
+      ) %>%
+        layout(
+          title = list(text = sprintf("<b>%s Gene Expression</b>", gene), x = 0.5, xanchor = "center"),
+          xaxis = list(
+            title = list(text = "<b>Sample Groups</b>"),
+            zerolinecolor = '#969696',
+            zerolinewidth = 2,
+            linecolor = '#636363',
+            linewidth = 2,
+            gridcolor = '#e0e0e0'
+          ),
+          yaxis = list(
+            title = list(text = paste0("<b>", ifelse(log == "yes", "Log₂ ", ""), "Gene Expression</b>")),
+            zerolinecolor = '#969696',
+            zerolinewidth = 2,
+            linecolor = '#636363',
+            linewidth = 2,
+            gridcolor = '#e0e0e0'
+          ),
+          legend = list(
+            title = list(text = paste0('<b>', factor, '</b>')),
+            x = 1.02,
+            y = 1,
+            xanchor = "left",
+            bgcolor = 'rgba(255,255,255,0.9)',
+            bordercolor = '#636363',
+            borderwidth = 1
+          )
+        ) %>% configure_plotly_panel(exportFormat = "svg")
+      
+    } else if(box_type == "violin_points"){
+      plotly::plot_ly(
+        table,
+        type = "violin",
+        points = 'all',
+        pointpos = 0,
+        box = list(visible = TRUE),
+        meanline = list(visible = TRUE),
+        x = as.formula(paste0("~", factor)),
+        y = as.formula(paste0("~", gene2)),
+        color = as.formula(paste0("~", factor)),
+        colors = my_colors
+      ) %>%
+        layout(
+          title = list(text = sprintf("<b>%s Gene Expression</b>", gene), x = 0.5, xanchor = "center"),
+          xaxis = list(
+            title = list(text = "<b>Sample Groups</b>"),
+            zerolinecolor = '#969696',
+            zerolinewidth = 2,
+            linecolor = '#636363',
+            linewidth = 2,
+            gridcolor = '#e0e0e0'
+          ),
+          yaxis = list(
+            title = list(text = paste0("<b>", ifelse(log == "yes", "Log₂ ", ""), "Gene Expression</b>")),
+            zerolinecolor = '#969696',
+            zerolinewidth = 2,
+            linecolor = '#636363',
+            linewidth = 2,
+            gridcolor = '#e0e0e0'
+          ),
+          legend = list(
+            title = list(text = paste0('<b>', factor, '</b>')),
+            x = 1.02,
+            y = 1,
+            xanchor = "left",
+            bgcolor = 'rgba(255,255,255,0.9)',
+            bordercolor = '#636363',
+            borderwidth = 1
+          )
+        ) %>% configure_plotly_panel(exportFormat = "svg")
+    }
+    
+  } else if(plot_type == "ggplot"){
+    if(factor == "replicate"){
+      table$replicate <- as.character(table$replicate)
+    }
+    
+    if(length(unique(table[,factor])) <= 4){
+      comparisons <- get_factor_comparisons(condition = table[,factor])
+      my_comparisons <- list()
+      for(i in 1:nrow(comparisons)){
+        v <- c(comparisons[i,2], comparisons[i,3])
+        my_comparisons[[length(my_comparisons)+1]] <- v
+      }
+      
+      if (box_type == "Boxplot"){
+        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
+          geom_boxplot(notch = FALSE, alpha = 0.2, outlier.shape = NA) +
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Gene Expression")) + 
+          xlab("Sample Groups") +
+          ggtitle(paste(gene, "Gene Expression")) +
+          scale_color_manual(values = my_colors, name = factor) + 
+          scale_fill_manual(values = my_colors, name = factor) + 
+          stat_compare_means(comparisons = my_comparisons, method = "t.test", paired = FALSE) +
+          theme_classic() + 
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+            axis.title.x = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 12, face = "bold"),
+            legend.title = element_text(size = 11, face = "bold"),
+            legend.text = element_text(size = 10),
+            legend.position = "right",
+            legend.background = element_rect(fill = "white", color = "gray80"),
+            legend.key = element_rect(fill = "white")
+          )
+        
+      } else if(box_type == "box_points"){
+        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
+          geom_boxplot(notch = FALSE, alpha = 0.2, outlier.shape = NA) +
+          geom_jitter(size = 2, alpha = 0.6, width = 0.2) +
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Gene Expression")) + 
+          xlab("Sample Groups") +
+          ggtitle(paste(gene, "Gene Expression")) +
+          scale_color_manual(values = my_colors, name = factor) + 
+          scale_fill_manual(values = my_colors, name = factor) + 
+          stat_compare_means(comparisons = my_comparisons, method = "t.test", paired = FALSE) +
+          theme_classic() + 
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+            axis.title.x = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 12, face = "bold"),
+            legend.title = element_text(size = 11, face = "bold"),
+            legend.text = element_text(size = 10),
+            legend.position = "right",
+            legend.background = element_rect(fill = "white", color = "gray80"),
+            legend.key = element_rect(fill = "white")
+          )
+        
+      } else if(box_type == "Violin plot"){
+        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
+          geom_violin(alpha = 0.2) +
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Gene Expression")) + 
+          xlab("Sample Groups") +
+          ggtitle(paste(gene, "Gene Expression")) +
+          scale_color_manual(values = my_colors, name = factor) + 
+          scale_fill_manual(values = my_colors, name = factor) + 
+          stat_compare_means(comparisons = my_comparisons, method = "t.test", paired = FALSE) +
+          theme_classic() + 
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+            axis.title.x = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 12, face = "bold"),
+            legend.title = element_text(size = 11, face = "bold"),
+            legend.text = element_text(size = 10),
+            legend.position = "right",
+            legend.background = element_rect(fill = "white", color = "gray80"),
+            legend.key = element_rect(fill = "white")
+          )
+        
+      } else if(box_type == "violin_points"){
+        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
+          geom_violin(alpha = 0.2) +
+          geom_jitter(size = 2, alpha = 0.6, width = 0.2) +
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Gene Expression")) + 
+          xlab("Sample Groups") +
+          ggtitle(paste(gene, "Gene Expression")) +
+          scale_color_manual(values = my_colors, name = factor) + 
+          scale_fill_manual(values = my_colors, name = factor) + 
+          stat_compare_means(comparisons = my_comparisons, method = "t.test", paired = FALSE) +
+          theme_classic() + 
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+            axis.title.x = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 12, face = "bold"),
+            legend.title = element_text(size = 11, face = "bold"),
+            legend.text = element_text(size = 10),
+            legend.position = "right",
+            legend.background = element_rect(fill = "white", color = "gray80"),
+            legend.key = element_rect(fill = "white")
+          )
+      } 
+      
+    } else {
+      if (box_type == "Boxplot"){
+        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
+          geom_boxplot(notch = FALSE, alpha = 0.2, outlier.shape = NA) +
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Gene Expression")) + 
+          xlab("Sample Groups") +
+          ggtitle(paste(gene, "Gene Expression")) +
+          scale_color_manual(values = my_colors, name = factor) + 
+          scale_fill_manual(values = my_colors, name = factor) + 
+          theme_classic() + 
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+            axis.title.x = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 12, face = "bold"),
+            legend.title = element_text(size = 11, face = "bold"),
+            legend.text = element_text(size = 10),
+            legend.position = "right",
+            legend.background = element_rect(fill = "white", color = "gray80"),
+            legend.key = element_rect(fill = "white")
+          )
+        
+      } else if(box_type == "box_points"){
+        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
+          geom_boxplot(notch = FALSE, alpha = 0.2, outlier.shape = NA) +
+          geom_jitter(size = 2, alpha = 0.6, width = 0.2) +
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Gene Expression")) + 
+          xlab("Sample Groups") +
+          ggtitle(paste(gene, "Gene Expression")) +
+          scale_color_manual(values = my_colors, name = factor) + 
+          scale_fill_manual(values = my_colors, name = factor) + 
+          theme_classic() + 
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+            axis.title.x = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 12, face = "bold"),
+            legend.title = element_text(size = 11, face = "bold"),
+            legend.text = element_text(size = 10),
+            legend.position = "right",
+            legend.background = element_rect(fill = "white", color = "gray80"),
+            legend.key = element_rect(fill = "white")
+          )
+        
+      } else if(box_type == "Violin plot"){
+        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
+          geom_violin(alpha = 0.2) +
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Gene Expression")) + 
+          xlab("Sample Groups") +
+          ggtitle(paste(gene, "Gene Expression")) +
+          scale_color_manual(values = my_colors, name = factor) + 
+          scale_fill_manual(values = my_colors, name = factor) + 
+          theme_classic() + 
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+            axis.title.x = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 12, face = "bold"),
+            legend.title = element_text(size = 11, face = "bold"),
+            legend.text = element_text(size = 10),
+            legend.position = "right",
+            legend.background = element_rect(fill = "white", color = "gray80"),
+            legend.key = element_rect(fill = "white")
+          )
+        
+      } else if(box_type == "violin_points"){
+        ggplot(table, aes_string(x = factor, y = as.symbol(gene), color = factor, fill = factor)) +
+          geom_violin(alpha = 0.2) +
+          geom_jitter(size = 2, alpha = 0.6, width = 0.2) +
+          ylab(paste0(ifelse(log == "yes", "Log₂ ", ""), "Gene Expression")) + 
+          xlab("Sample Groups") +
+          ggtitle(paste(gene, "Gene Expression")) +
+          scale_color_manual(values = my_colors, name = factor) + 
+          scale_fill_manual(values = my_colors, name = factor) + 
+          theme_classic() + 
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+            axis.title.x = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 12, face = "bold"),
+            legend.title = element_text(size = 11, face = "bold"),
+            legend.text = element_text(size = 10),
+            legend.position = "right",
+            legend.background = element_rect(fill = "white", color = "gray80"),
+            legend.key = element_rect(fill = "white")
+          )
+      }
+    }
+  }
+}
+
+## ------------------ SAMPLE DISTANCE HEATMAP ------------------
+run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, scale_type = "none", ntop = 500) {
+  
+  gene_cols <- intersect(colnames(counts), c("gene_id", "gene_name"))
+  sample_cols <- setdiff(colnames(counts), gene_cols)
+  
+  if (!is.null(remove_samples) && length(remove_samples) > 0) {
+    sample_cols <- setdiff(sample_cols, remove_samples)
+    if (!is.null(metadata)) {
+      metadata <- metadata[metadata$sample_id %in% sample_cols, ]
+    }
+  }
+  
+  expr_matrix <- as.matrix(counts[, sample_cols, drop = FALSE])
+  
+  if ("gene_id" %in% colnames(counts)) {
+    rownames(expr_matrix) <- counts$gene_id
+  }
+  
+  # STEP 1: Select top variable genes from the unscaled matrix.
+  rv <- rowVars(as.matrix(expr_matrix))
+  select <- order(rv, decreasing = TRUE)[seq_len(min(ntop, length(rv)))]
+  expr_matrix <- expr_matrix[select, , drop = FALSE]
+  
+  # Apply scaling after gene selection.
+  if (scale_type == "row") {
+    # Z-score across samples for each gene (row). Genes with zero variance
+    # after subsetting are dropped to avoid NaN distances.
+    row_sds <- apply(expr_matrix, 1, sd, na.rm = TRUE)
+    expr_matrix <- expr_matrix[row_sds > 0, , drop = FALSE]
+    expr_matrix <- t(scale(t(expr_matrix)))
+  } else if (scale_type == "column") {
+    expr_matrix <- scale(expr_matrix)
+  } else if (scale_type == "log") {
+    expr_matrix <- log10(expr_matrix + 1)
+  }
+  
+  # Compute Euclidean distances between samples.
+  sampleDists <- dist(t(expr_matrix))
+  sampleDistMatrix <- as.matrix(sampleDists)
+  
+  rownames(sampleDistMatrix) <- sample_cols
+  colnames(sampleDistMatrix) <- sample_cols
+  
+  return(as.data.frame(sampleDistMatrix))
+}
+
+plot_sample_distance_heatmap <- function(dist_matrix, 
+                                         metadata = NULL,
+                                         color_by = NULL,
+                                         sidebar_color_scheme = "Set1",
+                                         heatmap_title = "Sample Distance Heatmap",
+                                         heatmap_color_scheme = "viridis",
+                                         xlab = "",
+                                         ylab = "",
+                                         column_text_angle = 45,
+                                         cex_row = 1,
+                                         cex_col = 1,
+                                         show_dendrogram = c(TRUE, TRUE),
+                                         plot_type = "heatmaply",
+                                         colorbar_xpos = 1.02,
+                                         colorbar_ypos = 0.5,
+                                         show_tick_labels = c(TRUE, TRUE),
+                                         colorbar_len = 0.4,
+                                         legend_x,
+                                         legend_y) {
+  
+  sampleDistMatrix <- dist_matrix
+  original_ids <- rownames(sampleDistMatrix)
+  
+  # Build display labels for axis tick marks
+  display_labels <- stringr::str_to_title(gsub("_", " ", original_ids))
+  rownames(sampleDistMatrix) <- display_labels
+  colnames(sampleDistMatrix) <- display_labels
+  
+  row_side_colors <- NULL
+  row_side_palette <- NULL
+  
+  if (!is.null(metadata) && !is.null(color_by) && color_by %in% colnames(metadata)) {
+    # Match directly on the original (pre-formatting) sample IDs
+    ann_colors <- metadata[, c("sample_id", color_by), drop = FALSE]
+    rownames(ann_colors) <- ann_colors$sample_id
+    
+    matched_annotations <- ann_colors[original_ids, color_by, drop = FALSE]
+    
+    if (!all(is.na(matched_annotations[[color_by]]))) {
+      row_side_colors <- data.frame(matched_annotations[[color_by]], 
+                                    stringsAsFactors = FALSE)
+      colnames(row_side_colors) <- stringr::str_to_title(gsub("_", " ", color_by))
+      rownames(row_side_colors) <- display_labels
+      
+      unique_vals <- unique(row_side_colors[[1]])
+      unique_vals <- unique_vals[!is.na(unique_vals)]
+      n_colors <- length(unique_vals)
+      
+      if (n_colors <= 8) {
+        base_colors <- RColorBrewer::brewer.pal(max(3, n_colors), sidebar_color_scheme)
+      } else {
+        base_colors <- colorRampPalette(RColorBrewer::brewer.pal(8, sidebar_color_scheme))(n_colors)
+      }
+      
+      row_side_palette <- setNames(base_colors[seq_len(n_colors)], unique_vals)
+    }
+  }
+  
+  selected_colors <- c()
+  if (length(heatmap_color_scheme) == 1) {
+    if (heatmap_color_scheme == "viridis") {
+      selected_colors <- viridis::viridis(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "magma") {
+      selected_colors <- viridis::magma(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "inferno") {
+      selected_colors <- viridis::inferno(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "plasma") {
+      selected_colors <- viridis::plasma(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "cividis") {
+      selected_colors <- viridis::cividis(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "rocket") {
+      selected_colors <- viridis::rocket(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "mako") {
+      selected_colors <- viridis::mako(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "turbo") {
+      selected_colors <- viridis::turbo(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "RdBu") {
+      selected_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "RdBu")))(256)
+    } else if (heatmap_color_scheme == "RdYlBu") {
+      selected_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "RdYlBu")))(256)
+    } else {
+      tryCatch({
+        selected_colors <- colorRampPalette(RColorBrewer::brewer.pal(9, heatmap_color_scheme))(256)
+      }, error = function(e) {
+        selected_colors <- viridis::viridis(n = 256, alpha = 1, begin = 0, end = 1)
+      })
+    }
+  } else {
+    selected_colors <- heatmap_color_scheme
+  }
+  
+  if (tolower(plot_type) == "heatmaply") {
+    p <- heatmaply::heatmaply(
+      sampleDistMatrix,
+      colors = selected_colors,
+      xlab = xlab,
+      ylab = ylab,
+      main = heatmap_title,
+      column_text_angle = column_text_angle,
+      key.title = "Euclidean\nsample\ndistance",
+      cexRow = cex_row,
+      cexCol = cex_col,
+      Rowv = show_dendrogram[1],
+      Colv = show_dendrogram[2],
+      row_side_colors = row_side_colors,
+      row_side_palette = row_side_palette,
+      plot_method = "plotly",
+      colorbar_xpos = colorbar_xpos,
+      colorbar_ypos = colorbar_ypos,
+      showticklabels = show_tick_labels,
+      colorbar_len = colorbar_len,
+      side_color_colorbar_len = 0.25,
+      width = 1500,
+      height = 1000
+    )
+    
+    if (exists("configure_plotly_panel")) {
+      p <- configure_plotly_panel(p, exportFormat = "svg")
+    }
+    return(p)
+    
+  } else if (tolower(plot_type) == "ggplot") {
+    
+    hc_row <- NULL
+    hc_col <- NULL
+    
+    if (show_dendrogram[1] || show_dendrogram[2]) {
+      dist_mat <- as.matrix(sampleDistMatrix)
+      
+      if (show_dendrogram[1]) {
+        hc_row <- hclust(as.dist(dist_mat))
+      }
+      if (show_dendrogram[2]) {
+        hc_col <- hclust(as.dist(t(dist_mat)))
+      }
+    }
+    
+    dist_melt <- reshape2::melt(as.matrix(sampleDistMatrix))
+    colnames(dist_melt) <- c("Sample1", "Sample2", "Distance")
+    
+    if (!is.null(hc_row)) {
+      dist_melt$Sample1 <- factor(dist_melt$Sample1, 
+                                  levels = rownames(sampleDistMatrix)[hc_row$order])
+    } else {
+      dist_melt$Sample1 <- factor(dist_melt$Sample1, 
+                                  levels = rownames(sampleDistMatrix))
+    }
+    
+    if (!is.null(hc_col)) {
+      dist_melt$Sample2 <- factor(dist_melt$Sample2, 
+                                  levels = colnames(sampleDistMatrix)[hc_col$order])
+    } else {
+      dist_melt$Sample2 <- factor(dist_melt$Sample2, 
+                                  levels = colnames(sampleDistMatrix))
+    }
+    
+    p <- ggplot2::ggplot(dist_melt, ggplot2::aes(x = Sample2, y = Sample1, fill = Distance)) +
+      ggplot2::geom_tile(color = "white", linewidth = 0.5) +
+      ggplot2::scale_fill_gradientn(colors = selected_colors, name = "Euclidean\nsample\ndistance") +
+      ggplot2::labs(title = heatmap_title, x = xlab, y = ylab) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        panel.grid = ggplot2::element_blank(),
+        plot.title = ggplot2::element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.text.x = ggplot2::element_text(
+          angle = column_text_angle, 
+          vjust = 0.5, 
+          size = 10
+        ),
+        axis.text.y = ggplot2::element_text(size = 10),
+        legend.title = ggplot2::element_text(size = 11, face = "bold"),
+        legend.text = ggplot2::element_text(size = 9),
+        legend.position = "right",
+        axis.title.x = ggplot2::element_text(size = 12, face = "bold"),
+        axis.title.y = ggplot2::element_text(size = 12, face = "bold")
+      )
+    
+    if (!show_tick_labels[2]) {
+      p <- p + ggplot2::theme(axis.text.y = ggplot2::element_blank(),
+                              axis.ticks.y = ggplot2::element_blank())
+    }
+    if (!show_tick_labels[1]) {
+      p <- p + ggplot2::theme(axis.text.x = ggplot2::element_blank(),
+                              axis.ticks.x = ggplot2::element_blank())
+    }
+    
+    return(p)
+  }
+}
+
+# ------------------ GENE EXPRESSION HEATMAP ------------------
+
+prepare_gene_expression_matrix <- function(counts, 
+                                           metadata, 
+                                           gene_list, 
+                                           remove_samples = NULL) {
+  
+  if ("gene_name" %in% colnames(counts)) {
+    gene_data <- counts[counts$gene_name %in% gene_list, ]
+    rownames(gene_data) <- gene_data$gene_name
+    gene_data <- gene_data[, !colnames(gene_data) %in% c("gene_id", "gene_name"), drop = FALSE]
+  } else {
+    gene_data <- counts[rownames(counts) %in% gene_list, ]
+  }
+  
+  if (!is.null(remove_samples) && length(remove_samples) > 0) {
+    keep_cols <- setdiff(colnames(gene_data), remove_samples)
+    gene_data <- gene_data[, keep_cols, drop = FALSE]
+  }
+  
+  expr_matrix <- as.matrix(gene_data)
+  
+  expr_matrix[is.na(expr_matrix)] <- 0
+  
+  return(expr_matrix)
+}
+
+plot_gene_expression_heatmap <- function(counts,
+                                         gene_list,
+                                         gene_annotations,
+                                         sample_list,
+                                         metadata = NULL,
+                                         color_by = NULL,
+                                         sidebar_color_scheme = "Set1",
+                                         heatmap_title = "Gene Expression Heatmap",
+                                         heatmap_color_scheme = "RdYlBu",
+                                         xlab = "Samples",
+                                         ylab = "Genes",
+                                         column_text_angle = 90,
+                                         legend_title = "Expression",
+                                         cex_row = 0.5,
+                                         cex_col = 0.5,
+                                         cluster = "both",
+                                         dendrogram = "both",
+                                         scaling = "none",
+                                         show_names = "both",
+                                         heatmap_type = "heatmaply",
+                                         vst_data = NULL,
+                                         colorbar_xpos = 1.02,
+                                         colorbar_ypos = 0.5,
+                                         colorbar_len = 0.3) { 
+  
+  if ("gene_id" %in% colnames(counts) || "gene_name" %in% colnames(counts)) {
+    gene_cols <- intersect(colnames(counts), c("gene_id", "gene_name"))
+    
+    data_to_use <- if (!is.null(vst_data)) vst_data else counts
+    
+    dat <- data_to_use[data_to_use$gene_name %in% gene_list | data_to_use$gene_id %in% gene_list, 
+                       sample_list, drop = FALSE]
+    rownames(dat) <- if("gene_name" %in% colnames(data_to_use)) {
+      data_to_use$gene_name[data_to_use$gene_name %in% gene_list | data_to_use$gene_id %in% gene_list]
+    } else {
+      data_to_use$gene_id[data_to_use$gene_name %in% gene_list | data_to_use$gene_id %in% gene_list]
+    }
+  } else {
+    data_to_use <- if (!is.null(vst_data)) vst_data else counts
+    dat <- data_to_use[rownames(data_to_use) %in% gene_list, sample_list, drop = FALSE]
+  }
+  
+  gene_sd <- apply(dat, 1, sd, na.rm = TRUE)
+  dat <- dat[!is.na(gene_sd) & gene_sd > 0, , drop = FALSE]
+  gene_list_filtered <- rownames(dat)
+  
+  col_side_colors <- NULL
+  col_side_palette <- NULL
+  
+  if (!is.null(metadata) && !is.null(color_by) && color_by != "" && color_by %in% colnames(metadata)) {
+    col_side_colors <- metadata[match(sample_list, metadata$sample_id), color_by, drop = FALSE]
+    rownames(col_side_colors) <- sample_list
+    colnames(col_side_colors) <- color_by
+    
+    unique_vals <- unique(col_side_colors[[color_by]])
+    n_colors <- length(unique_vals)
+    col_side_palette <- setNames(
+      colorRampPalette(RColorBrewer::brewer.pal(min(8, max(3, n_colors)), sidebar_color_scheme))(n_colors),
+      unique_vals
+    )
+  }
+  
+  gene_annotation_columns <- c("gene_name", "gene_id", "gene_biotype")
+  available_cols <- intersect(gene_annotation_columns, colnames(gene_annotations))
+  
+  if (!is.null(gene_annotations) && length(available_cols) > 0) {
+    dat_annotation <- gene_annotations[match(gene_list_filtered, gene_annotations$gene_name), 
+                                       available_cols, drop = FALSE]
+    if (nrow(dat_annotation) == 0 || all(is.na(dat_annotation$gene_name))) {
+      dat_annotation <- gene_annotations[match(gene_list_filtered, gene_annotations$gene_id), 
+                                         available_cols, drop = FALSE]
+    }
+    rownames(dat_annotation) <- gene_list_filtered
+    
+    hover_text <- sapply(sample_list, function(sid) {
+      paste0("<b><i>", dat_annotation$gene_name, "</i></b><br>", 
+             "<b>Sample: </b>", sid, "<br>",
+             if("gene_id" %in% colnames(dat_annotation)) paste0("<b>ID: </b>", dat_annotation$gene_id, "<br>") else "",
+             if("gene_biotype" %in% colnames(dat_annotation)) paste0("<b>Biotype: </b>", dat_annotation$gene_biotype, "<br>") else "")
+    })
+    if (length(gene_list_filtered) == 1) {
+      hover_text <- matrix(hover_text, ncol = length(sample_list))
+    }
+  } else {
+    hover_text <- NULL
+  }
+  
+  show_rowv <- cluster %in% c("row", "both")
+  show_colv <- cluster %in% c("column", "both")
+  
+  if (dendrogram == "none") {
+    show_rowv <- FALSE
+    show_colv <- FALSE
+  } else if (dendrogram == "row") {
+    show_rowv <- TRUE
+    show_colv <- FALSE
+  } else if (dendrogram == "column") {
+    show_rowv <- FALSE
+    show_colv <- TRUE
+  } else if (dendrogram == "both") {
+    show_rowv <- TRUE
+    show_colv <- TRUE
+  }
+  
+  if (show_names == "none") {
+    show_tick_labels <- c(FALSE, FALSE)
+  } else if (show_names == "column" || show_names == "x") {
+    show_tick_labels <- c(TRUE, FALSE)
+  } else if (show_names == "row" || show_names == "y") {
+    show_tick_labels <- c(FALSE, TRUE)
+  } else {
+    show_tick_labels <- c(TRUE, TRUE)
+  }
+  limits <- NULL
+  
+  if (tolower(scaling) %in% c("row", "z-score")) {
+    dat <- as.matrix(dat)
+    storage.mode(dat) <- "double"
+    row_sds <- apply(dat, 1, sd, na.rm = TRUE)
+    dat <- dat[!is.na(row_sds) & row_sds > 0, , drop = FALSE]
+    dat <- t(scale(t(dat)))
+    dat <- matrix(as.numeric(dat),
+                  nrow = nrow(dat), ncol = ncol(dat),
+                  dimnames = dimnames(dat))
+    gene_list_filtered <- rownames(dat)
+    max_abs <- max(abs(dat), na.rm = TRUE)
+    limits  <- c(-max_abs, max_abs)
+    message("[Heatmap] Z-score range: [",
+            round(min(dat, na.rm = TRUE), 3), ", ",
+            round(max(dat, na.rm = TRUE), 3), "] — ",
+            sum(dat < 0, na.rm = TRUE), " negative values present")
+  } else if (tolower(scaling) == "log") {
+    dat <- as.matrix(dat)
+    storage.mode(dat) <- "double"
+    dat <- log2(dat + 1)
+  } else {
+    if (!tolower(scaling) %in% c("none", "")) {
+      warning("Unrecognised scaling value '", scaling, "' — no scaling applied.")
+    }
+  }
+  scale_param <- "none"
+  
+  selected_colors <- c()
+  if (length(heatmap_color_scheme) == 1) {
+    if (heatmap_color_scheme == "viridis") {
+      heatmap_colors <- viridis::viridis(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "magma") {
+      heatmap_colors <- viridis::magma(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "inferno") {
+      heatmap_colors <- viridis::inferno(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "plasma") {
+      heatmap_colors <- viridis::plasma(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "cividis") {
+      heatmap_colors <- viridis::cividis(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "rocket") {
+      heatmap_colors <- viridis::rocket(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "mako") {
+      heatmap_colors <- viridis::mako(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "turbo") {
+      heatmap_colors <- viridis::turbo(n = 256, alpha = 1, begin = 0, end = 1)
+    } else if (heatmap_color_scheme == "RdBu") {
+      heatmap_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "RdBu")))(256)
+    } else if (heatmap_color_scheme == "RdYlBu") {
+      heatmap_colors <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "RdYlBu")))(256)
+    } else {
+      tryCatch({
+        heatmap_colors <- colorRampPalette(RColorBrewer::brewer.pal(9, heatmap_color_scheme))(256)
+      }, error = function(e) {
+        heatmap_colors <- viridis::viridis(n = 256, alpha = 1, begin = 0, end = 1)
+      })
+    }
+  } else {
+    heatmap_colors <- heatmap_color_scheme
+  }
+  
+  if (tolower(heatmap_type) == "heatmaply") {
+    hm <- heatmaply::heatmaply(
+      dat,
+      limits = limits,
+      colors = heatmap_colors,
+      xlab = xlab,
+      ylab = ylab,
+      main = heatmap_title,
+      custom_hovertext = hover_text,
+      column_text_angle = column_text_angle,
+      key.title = legend_title,
+      cexRow = cex_row,
+      cexCol = cex_col,
+      show_dendrogram = c(show_rowv, show_colv),
+      col_side_colors = col_side_colors,
+      col_side_palette = col_side_palette,
+      plot_method = "plotly",
+      showticklabels = show_tick_labels,
+      colorbar_xpos = 1.02,
+      colorbar_ypos = 0.5,  
+      colorbar_len = 0.3,
+      side_color_colorbar_len = 0.2,
+      Rowv = ifelse(nrow(dat) == 1, FALSE, show_rowv),
+      Colv = ifelse(ncol(dat) == 1, FALSE, show_colv),
+      scale = scale_param,
+      width = 1500,
+      height = 1000
+    )
+    
+    hm <- configure_plotly_panel(hm, exportFormat = "svg")
+    return(hm)
+    
+  } else if (tolower(heatmap_type) == "ggheatmap" || tolower(heatmap_type) == "ggplot") {
+    p_heatmap <- heatmaply::ggheatmap(
+      dat,
+      xlab = xlab,
+      ylab = ylab,
+      main = heatmap_title,
+      column_text_angle = column_text_angle,
+      key.title = legend_title,
+      cexRow = cex_row,
+      cexCol = cex_col,
+      show_dendrogram = c(show_rowv, show_colv),
+      col_side_colors = col_side_colors,
+      col_side_palette = col_side_palette,
+      showticklabels = show_tick_labels,
+      colorbar_len = 0.3,
+      side_color_colorbar_len = 0.25,
+      Rowv = ifelse(nrow(dat) == 1, FALSE, show_rowv),
+      Colv = ifelse(ncol(dat) == 1, FALSE, show_colv),
+      scale = scale_param
+    )
+    return(p_heatmap)
+  } else {
+    warning(paste0("Invalid heatmap type: ", heatmap_type))
+    return(NULL)
+  }
+}
