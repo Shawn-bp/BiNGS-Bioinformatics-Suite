@@ -19,6 +19,8 @@ require(fst)
 require(ggpubr)
 require(matrixStats)
 require(heatmaply)
+require(ggdendro)
+require(patchwork)
 library(RColorBrewer)
 library(DESeq2)
 library(SummarizedExperiment)
@@ -263,7 +265,7 @@ ui <- fluidPage(
                       br(),
                       br(),
                       conditionalPanel(
-                        "input.Sample_Distance_Heatmap_Plot_type == 'ggplot'",
+                        "input.Sample_Distance_Heatmap_Plot_type == 'pheatmap'",
                         plotOutput("sample_distance_heatmap", height = "900px", width = "1200px")
                       ),
                       conditionalPanel(
@@ -350,7 +352,7 @@ ui <- fluidPage(
                       br(),
                       br(),
                       conditionalPanel(
-                        "input.gene_heatmap_plot_type == 'ggplot'",
+                        "input.gene_heatmap_plot_type == 'pheatmap'",
                         plotOutput("gene_expression_heatmap_ggplot")
                       ),
                       conditionalPanel(
@@ -728,13 +730,14 @@ server <- function(input, output, session) {
         input$sample_distance_heatmap_dendrogram_list %in% c("row", "both"),
         input$sample_distance_heatmap_dendrogram_list %in% c("column", "both")
       ),
-      plot_type = "ggplot",
+      plot_type = "pheatmap",
       show_tick_labels = c(
         input$sample_distance_heatmap_show_names %in% c("x", "both"),
         input$sample_distance_heatmap_show_names %in% c("y", "both")
       )
     )
-    print(p)
+    grid::grid.newpage()
+    grid::grid.draw(p$gtable)
   })
   
   # ---- Render heatmaply ----
@@ -837,7 +840,7 @@ server <- function(input, output, session) {
     )
   }, ignoreNULL = FALSE)
   
-  # Render static ggplot heatmap
+  # Render static pheatmap heatmap
   output$gene_expression_heatmap_ggplot <- renderPlot({
     req(gene_sample_lists_reactive())
     
@@ -860,11 +863,13 @@ server <- function(input, output, session) {
       cex_row = 1,
       cex_col = 1,
       scaling = input$gene_heatmap_scaling_type,
-      cluster = input$gene_heatmap_clustering_type,
+      cluster = input$gene_heatmap_dendrogram_list,,
       dendrogram = input$gene_heatmap_dendrogram_list,
       show_names = input$gene_heatmap_show_names,
-      heatmap_type = "ggheatmap"
+      heatmap_type = "pheatmap"
     )
+    grid::grid.newpage()
+    grid::grid.draw(p$gtable)
   }, height = 900, width = 1200)
   
   # Render interactive heatmaply
@@ -890,7 +895,7 @@ server <- function(input, output, session) {
       cex_row = 1,
       cex_col = 1,
       scaling = input$gene_heatmap_scaling_type,
-      cluster = input$gene_heatmap_clustering_type,
+      cluster = input$gene_heatmap_dendrogram_list,
       dendrogram = input$gene_heatmap_dendrogram_list,
       show_names = input$gene_heatmap_show_names,
       heatmap_type = "heatmaply"
