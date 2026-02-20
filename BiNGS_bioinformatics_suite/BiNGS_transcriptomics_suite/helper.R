@@ -107,7 +107,7 @@ sample_distance_show_names_list = c("None" = "none", "X-axis only" = "x", "Y-axi
 
 gene_heatmap_show_names_list = c("None" = "none", "Gene Names" = "row", "Sample IDs" = "column", "Both" = "both")
 
-heatmap_type_list = c("Interactive" = "heatmaply", "Static" = "ggplot")
+heatmap_type_list = c("Interactive" = "heatmaply", "Static" = "pheatmap")
 
 heatmap_color_scheme_list = c(
   "Red-White-Blue" = "RdBu",
