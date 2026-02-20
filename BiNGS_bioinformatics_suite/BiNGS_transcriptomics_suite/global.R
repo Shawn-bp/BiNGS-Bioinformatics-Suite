@@ -893,15 +893,15 @@ run_sample_distance <- function(counts, metadata = NULL, remove_samples = NULL, 
     rownames(expr_matrix) <- counts$gene_id
   }
   
-  # STEP 1: Select top variable genes from the unscaled matrix.
+  # Select top variable genes from the unscaled matrix.
   rv <- rowVars(as.matrix(expr_matrix))
   select <- order(rv, decreasing = TRUE)[seq_len(min(ntop, length(rv)))]
   expr_matrix <- expr_matrix[select, , drop = FALSE]
   
   # Apply scaling after gene selection.
   if (scale_type == "row") {
-    # Z-score across samples for each gene (row). Genes with zero variance
-    # after subsetting are dropped to avoid NaN distances.
+    # Z-score across samples for each gene (row). 
+    # Genes with zero variance after subsetting are dropped to avoid NaN distances.
     row_sds <- apply(expr_matrix, 1, sd, na.rm = TRUE)
     expr_matrix <- expr_matrix[row_sds > 0, , drop = FALSE]
     expr_matrix <- t(scale(t(expr_matrix)))
@@ -1042,70 +1042,50 @@ plot_sample_distance_heatmap <- function(dist_matrix,
     }
     return(p)
     
-  } else if (tolower(plot_type) == "ggplot") {
+  } else if (tolower(plot_type) == "pheatmap") {
     
-    hc_row <- NULL
-    hc_col <- NULL
+    annotation_row <- NULL
+    ann_colors <- NULL
     
-    if (show_dendrogram[1] || show_dendrogram[2]) {
-      dist_mat <- as.matrix(sampleDistMatrix)
-      
-      if (show_dendrogram[1]) {
-        hc_row <- hclust(as.dist(dist_mat))
-      }
-      if (show_dendrogram[2]) {
-        hc_col <- hclust(as.dist(t(dist_mat)))
-      }
-    }
-    
-    dist_melt <- reshape2::melt(as.matrix(sampleDistMatrix))
-    colnames(dist_melt) <- c("Sample1", "Sample2", "Distance")
-    
-    if (!is.null(hc_row)) {
-      dist_melt$Sample1 <- factor(dist_melt$Sample1, 
-                                  levels = rownames(sampleDistMatrix)[hc_row$order])
-    } else {
-      dist_melt$Sample1 <- factor(dist_melt$Sample1, 
-                                  levels = rownames(sampleDistMatrix))
-    }
-    
-    if (!is.null(hc_col)) {
-      dist_melt$Sample2 <- factor(dist_melt$Sample2, 
-                                  levels = colnames(sampleDistMatrix)[hc_col$order])
-    } else {
-      dist_melt$Sample2 <- factor(dist_melt$Sample2, 
-                                  levels = colnames(sampleDistMatrix))
-    }
-    
-    p <- ggplot2::ggplot(dist_melt, ggplot2::aes(x = Sample2, y = Sample1, fill = Distance)) +
-      ggplot2::geom_tile(color = "white", linewidth = 0.5) +
-      ggplot2::scale_fill_gradientn(colors = selected_colors, name = "Euclidean\nsample\ndistance") +
-      ggplot2::labs(title = heatmap_title, x = xlab, y = ylab) +
-      ggplot2::theme_minimal() +
-      ggplot2::theme(
-        panel.grid = ggplot2::element_blank(),
-        plot.title = ggplot2::element_text(hjust = 0.5, size = 16, face = "bold"),
-        axis.text.x = ggplot2::element_text(
-          angle = column_text_angle, 
-          vjust = 0.5, 
-          size = 10
-        ),
-        axis.text.y = ggplot2::element_text(size = 10),
-        legend.title = ggplot2::element_text(size = 11, face = "bold"),
-        legend.text = ggplot2::element_text(size = 9),
-        legend.position = "right",
-        axis.title.x = ggplot2::element_text(size = 12, face = "bold"),
-        axis.title.y = ggplot2::element_text(size = 12, face = "bold")
+    if (!is.null(metadata) && !is.null(color_by) && color_by %in% colnames(metadata)) {
+      ann_df <- metadata[, c("sample_id", color_by), drop = FALSE]
+      rownames(ann_df) <- ann_df$sample_id
+      annotation_row <- data.frame(
+        ann_df[original_ids, color_by, drop = FALSE]
       )
+      colnames(annotation_row) <- color_by
+      rownames(annotation_row) <- display_labels
+      
+      unique_vals <- unique(annotation_row[[color_by]])
+      unique_vals <- unique_vals[!is.na(unique_vals)]
+      n_colors <- length(unique_vals)
+      base_colors <- if (n_colors <= 8) {
+        RColorBrewer::brewer.pal(max(3, n_colors), sidebar_color_scheme)
+      } else {
+        colorRampPalette(RColorBrewer::brewer.pal(8, sidebar_color_scheme))(n_colors)
+      }
+      ann_colors <- list(setNames(base_colors[seq_len(n_colors)], unique_vals))
+      names(ann_colors) <- color_by
+    }
     
-    if (!show_tick_labels[2]) {
-      p <- p + ggplot2::theme(axis.text.y = ggplot2::element_blank(),
-                              axis.ticks.y = ggplot2::element_blank())
-    }
-    if (!show_tick_labels[1]) {
-      p <- p + ggplot2::theme(axis.text.x = ggplot2::element_blank(),
-                              axis.ticks.x = ggplot2::element_blank())
-    }
+    p <- pheatmap::pheatmap(
+      as.matrix(sampleDistMatrix),
+      color             = selected_colors,
+      cluster_rows      = show_dendrogram[1],
+      cluster_cols      = show_dendrogram[2],
+      annotation_row    = annotation_row,
+      annotation_colors = ann_colors,
+      show_rownames     = show_tick_labels[2],
+      show_colnames     = show_tick_labels[1],
+      main              = heatmap_title,
+      fontsize          = 10,
+      fontsize_row      = cex_row * 10,
+      fontsize_col      = cex_col * 10,
+      angle_col         = column_text_angle,
+      legend            = TRUE,
+      border_color      = NA,
+      silent            = TRUE
+    )
     
     return(p)
   }
@@ -1345,25 +1325,53 @@ plot_gene_expression_heatmap <- function(counts,
     hm <- configure_plotly_panel(hm, exportFormat = "svg")
     return(hm)
     
-  } else if (tolower(heatmap_type) == "ggheatmap" || tolower(heatmap_type) == "ggplot") {
-    p_heatmap <- heatmaply::ggheatmap(
-      dat,
-      xlab = xlab,
-      ylab = ylab,
-      main = heatmap_title,
-      column_text_angle = column_text_angle,
-      key.title = legend_title,
-      cexRow = cex_row,
-      cexCol = cex_col,
-      show_dendrogram = c(show_rowv, show_colv),
-      col_side_colors = col_side_colors,
-      col_side_palette = col_side_palette,
-      showticklabels = show_tick_labels,
-      colorbar_len = 0.3,
-      side_color_colorbar_len = 0.25,
-      Rowv = ifelse(nrow(dat) == 1, FALSE, show_rowv),
-      Colv = ifelse(ncol(dat) == 1, FALSE, show_colv),
-      scale = scale_param
+  } else if (tolower(heatmap_type) == "pheatmap" || tolower(heatmap_type) == "ggplot") {
+    
+    annotation_col <- NULL
+    ann_colors     <- NULL
+    
+    if (!is.null(metadata) && !is.null(color_by) && color_by != "" && color_by %in% colnames(metadata)) {
+      ann_df <- metadata[match(sample_list, metadata$sample_id), color_by, drop = FALSE]
+      rownames(ann_df) <- sample_list
+      annotation_col <- data.frame(ann_df[[color_by]], row.names = sample_list)
+      colnames(annotation_col) <- color_by
+      
+      unique_vals <- unique(annotation_col[[color_by]])
+      unique_vals <- unique_vals[!is.na(unique_vals)]
+      n_colors    <- length(unique_vals)
+      base_colors <- if (n_colors <= 8) {
+        RColorBrewer::brewer.pal(max(3, n_colors), sidebar_color_scheme)
+      } else {
+        colorRampPalette(RColorBrewer::brewer.pal(8, sidebar_color_scheme))(n_colors)
+      }
+      ann_colors        <- list(setNames(base_colors[seq_len(n_colors)], unique_vals))
+      names(ann_colors) <- color_by
+    }
+    
+    # Build breaks for Z-score so colorbar is symmetric around 0
+    breaks <- NULL
+    if (!is.null(limits)) {
+      breaks <- seq(limits[1], limits[2], length.out = length(heatmap_colors) + 1)
+    }
+    
+    p_heatmap <- pheatmap::pheatmap(
+      as.matrix(dat),
+      color             = heatmap_colors,
+      breaks            = breaks,
+      cluster_rows      = ifelse(nrow(dat) == 1, FALSE, show_rowv),
+      cluster_cols      = ifelse(ncol(dat) == 1, FALSE, show_colv),
+      annotation_col    = annotation_col,
+      annotation_colors = ann_colors,
+      show_rownames     = show_tick_labels[2],
+      show_colnames     = show_tick_labels[1],
+      main              = heatmap_title,
+      fontsize          = 10,
+      fontsize_row      = cex_row * 10,
+      fontsize_col      = cex_col * 10,
+      angle_col         = column_text_angle,
+      legend            = TRUE,
+      border_color      = NA,
+      silent            = TRUE
     )
     return(p_heatmap)
   } else {
