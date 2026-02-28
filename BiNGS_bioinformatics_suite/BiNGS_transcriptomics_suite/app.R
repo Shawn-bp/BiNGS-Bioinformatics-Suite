@@ -377,19 +377,27 @@ ui <- fluidPage(
 
 #----- SERVER -----
 server <- function(input, output, session) {
-  options(shiny.maxRequestSize = 100 * 1024^2)
+  options(shiny.maxRequestSize = Inf)
   
   # --- Upload reactives ---
+  # Default files are loaded from data/ on startup.
+  # If the user uploads their own file via the UI, that takes precedence.
   count_data <- reactive({
-    req(input$counts_csv)
-    formatted_counts <- read.csv(input$counts_csv$datapath, check.names = FALSE)
+    if (!is.null(input$counts_csv)) {
+      formatted_counts <- read.csv(input$counts_csv$datapath, check.names = FALSE)
+    } else {
+      formatted_counts <- read.csv("data/salmon_gene_counts.csv", check.names = FALSE)
+    }
     colnames(formatted_counts) <- make.names(colnames(formatted_counts))
     return(formatted_counts)
   })
   
   sample_metadata <- reactive({
-    req(input$metadata_csv)
-    formatted_metadata <- read.csv(input$metadata_csv$datapath)
+    if (!is.null(input$metadata_csv)) {
+      formatted_metadata <- read.csv(input$metadata_csv$datapath)
+    } else {
+      formatted_metadata <- read.csv("data/sample_metadata_rna.csv")
+    }
     formatted_metadata$sample_id <- make.names(formatted_metadata$sample_id)
     return(formatted_metadata)
   })
@@ -415,11 +423,11 @@ server <- function(input, output, session) {
     has_large_range <- max(vals) > 100
     has_many_zeros <- mean(vals == 0) > 0.1
     
-    # Raw counts if ALL are true
+    # Raw counts if all are true
     !(looks_integer && has_large_range && has_many_zeros)
   })
   
-  # Display warning if raw counts detected
+  # Display warning if raw counts detected — only fires when a user uploads a new file
   observeEvent(input$counts_csv, {
     req(count_data())
     
@@ -808,7 +816,7 @@ server <- function(input, output, session) {
                          server = TRUE)
   })
   
-  # Add gene annotations reactive(remnant of old solution, currently not needed)
+  # Add gene annotations reactive (remnant of old solution, currently not needed)
   gene_annotations_reactive <- reactive({NULL})
   
   # Reactive: prepare gene list and sample list
