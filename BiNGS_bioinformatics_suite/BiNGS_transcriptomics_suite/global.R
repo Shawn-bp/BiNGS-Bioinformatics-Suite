@@ -1,3 +1,4 @@
+
 # ------------------ PCA ------------------
 run_pca <- function(counts, metadata, ntop = 500, remove_samples = NULL) {
   
@@ -45,7 +46,12 @@ plot_pca <- function(pca_coords, variance, x_pc, y_pc, color_var = NULL, shape_v
   y_label <- paste0(y_pc, " (", round(variance[as.numeric(gsub("PC", "", y_pc))], 2), "%)")
   
   if (plot_type == "ggplot") {
-    p <- ggplot(pca_coords, aes_string(x = x_pc, y = y_pc, color = color_var, shape = shape_var)) +
+    base_aes <- if (!is.null(shape_var) && shape_var != "") {
+      aes(x = .data[[x_pc]], y = .data[[y_pc]], color = .data[[color_var]], shape = .data[[shape_var]])
+    } else {
+      aes(x = .data[[x_pc]], y = .data[[y_pc]], color = .data[[color_var]])
+    }
+    p <- ggplot(pca_coords, base_aes) +
       geom_point(size = 6, alpha = 0.8) +
       scale_color_brewer(palette = palette, name = color_var) +
       labs(
